@@ -532,6 +532,9 @@ effect of typing a command — it is always your explicit call.
 **The log is the first place to look:**
 `<userData>/smln/logs/smln-<timestamp>.log`
 
+<details>
+<summary><b>🔍 Common symptoms & solutions (click to expand)</b></summary>
+
 | Symptom | Cause / fix |
 |---|---|
 | No splash, console won't open | SandLoader didn't load at all. Check whether the log file exists. If not, re-run `node install.js` then `node install.js --status`. |
@@ -546,6 +549,8 @@ effect of typing a command — it is always your explicit call.
 | GOG/standalone: game launcher reports changed files | Expected. The bootstrap *adds* `resources/app/`; it modifies nothing. `--uninstall` restores the original layout exactly. |
 | `SandLoader cannot attach to this build` | Microsoft Store / Game Pass. Not supported — see [Which stores work](#which-stores-work). |
 
+</details>
+
 Verify compatibility with your installed game at any time:
 
 ```bash
@@ -558,6 +563,9 @@ end-to-end, and tells you exactly what broke.
 ---
 
 ## FAQ
+
+<details>
+<summary><b>💬 Frequently Asked Questions (click to expand)</b></summary>
 
 **Does this modify my game files?**
 No. Not one byte. Patching happens in memory as files are served to the renderer.
@@ -609,6 +617,8 @@ A mod is arbitrary code with full Node access, exactly like this loader. The
 installer rejects archives without a valid manifest and refuses any that try to
 write outside the mods folder, but it cannot judge what the code does. Treat mods
 like any other software you install.
+
+</details>
 
 ---
 
@@ -731,6 +741,9 @@ play it — all inside the game, with no external tool and no file to
 hand-assemble. It opens from the same Maps browser: **New map…** in its footer,
 or **Edit** beside Play on a map that already exists.
 
+<details>
+<summary><b>🎨 Deep Dive: Map Editor Internals, Layers & Palettes (click to expand)</b></summary>
+
 ### The size floor is 158 × 201 cells
 
 Not a preference and not a round number. The game drops the player at one fixed
@@ -852,6 +865,8 @@ map that will open and disappoint is reported and then saved anyway — the auth
 is the one who knows whether a wall of fog is a mistake or the whole point of
 the map.
 
+</details>
+
 ---
 
 ## Missions and story
@@ -890,6 +905,9 @@ SMLN.story.step({
 A commented, loadable version of exactly that — plus all three cross-mod
 mechanisms and a console command to watch it work — is
 [`mods/example-missions/`](mods/example-missions/).
+
+<details>
+<summary><b>📜 Missions & Story SDK Reference (API, cross-mod, and lifecycle) (click to expand)</b></summary>
 
 ### The surface
 
@@ -1089,9 +1107,14 @@ and say nothing.
   successors. A mod that wants to give something does it from its own handler on
   `story.on('story:complete', …)`.
 
+</details>
+
 ---
 
 ## How it works
+
+<details>
+<summary><b>⚙️ Under the Hood: Architecture, Host ABI & In-Memory Patching (click to expand)</b></summary>
 
 ### Where the game has a loader slot, SandLoader fills it
 
@@ -1321,6 +1344,8 @@ Microsoft Store and Game Pass cannot be supported without modifying the game
 package, which would break its signature. The installer says so rather than
 offering a workaround.
 
+</details>
+
 ---
 
 ## Limitations and what's not built yet
@@ -1427,6 +1452,9 @@ ceilings, and the simulation-worker Sandkit). `MODDING_ENABLED` is still `false`
 - **Safe Spawn & Phantom Protection**: `spawn` command now checks world bounds, simulation empty-cell state, and structure/pipe collision. Spawning elements or terrain over existing buildings, machines, or pipes safely rejects overlapping cells, preventing simulation desyncs, missing collision, and visual phantom sprites.
 - **Gas Pipes v1.4.1**: Added automatic localization patch that dynamically renames the "Fluids" category to "Fluids & Gases" / "Жидкости и газы" across all 23 supported languages when the mod is enabled.
 - **Cross-Platform Easy Installers**: Added one-click launchers `Easy-Install-Windows.bat`, `Easy-Install-MacOS.command`, and `Easy-Install-Linux.sh` for hassle-free installation.
+
+<details>
+<summary><b>📦 Older Releases (0.4.0, 0.3.0, 0.2.0, 0.1.0) — click to expand</b></summary>
 
 ### 0.4.0
 
@@ -1950,6 +1978,8 @@ Verified against Sandustry 0.5.5.
 
 Initial release: in-game console, mod manager, in-memory patching against the
 game's own loader slot, and Fluxloader mod compatibility.
+
+</details>
 
 ---
 
