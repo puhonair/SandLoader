@@ -66,7 +66,7 @@ Main menu → "Maps"                                     →  browse, import, ed
 | **Game** | Sandustry **0.5.7** (also compatible with 0.5.6 and legacy 0.5.5) |
 | **Branch** | **Vanilla only** — Steam's default `public` branch. The experimental modded branch is **not supported** |
 | **Stores** | Steam, GOG, manual/standalone |
-| **Attach** | On **0.5.6+ (including 0.5.7)**: a shadow directory at `resources/app.asar`, with the original renamed aside; on legacy builds (up to 0.5.5) the Workshop loader slot where offered |
+| **Attach** | On **Steam 0.5.6+ (including 0.5.7)**: a shadow directory at `resources/app.asar`, with the original renamed aside; on **GOG and standalone** builds: an added `resources/app/` bootstrap; on legacy builds (up to 0.5.5) the Workshop loader slot where offered |
 | **Languages** | **All 23 game languages** supported with synchronous real-time UI switching |
 | **OS** | Windows, Linux or macOS |
 | **Node.js** | **18 or newer**, only to run the installer — [nodejs.org](https://nodejs.org) |
@@ -555,9 +555,9 @@ never modified.
 
 **Will Steam file verification flag it?**
 Steam's *Verify integrity of game files* checks the checksum of `app.asar` and will
-restore the clean vanilla `app.asar` archive. If you ever run verification,
-simply run `node install.js` (or `node install.js --repair` / `Easy-Install-Windows.bat`),
-which will re-archive stale backups and cleanly restore the loader mount in seconds.
+restore the clean vanilla `app.asar` archive, leaving the parked backup as an orphan.
+If you ever run verification, run `node install.js --repair` to remove the orphan,
+then run `node install.js` (or `Easy-Install-Windows.bat`) to reinstall the loader.
 Saves, custom maps, and mods remain completely untouched.
 
 **What about GOG?**
@@ -1331,9 +1331,9 @@ An honest list:
   turns it on, and if a later build enables it that deserves designing for
   properly rather than bolting on.
 
-- **Recipes work on 0.5.6, and only there.** 0.5.6 added a recipe registry with
+- **Recipes work on 0.5.6 and 0.5.7.** 0.5.6 added a recipe registry with
   nine machine categories — contacts, shakers, kineticPresses, growers,
-  condensers, steamDryers, synthesizers, snowmakers and smelters (and this registry continues into 0.5.7).
+  condensers, steamDryers, synthesizers, snowmakers and smelters; the registry continues into 0.5.7.
   `SMLN.register.recipe()` registers into it, and corelib's four recipe kinds
   are translated onto three of them: shakers, kinetic presses and growers (the
   game calls the grower machine `planterBox`). Contact recipes - element meets
