@@ -203,11 +203,6 @@
     var actions = document.createElement('div')
     actions.className = 'actions'
 
-    var lang = document.createElement('select')
-    lang.addEventListener('change', function () {
-      if (SMLN.i18n && typeof SMLN.i18n.setLocale === 'function') SMLN.i18n.setLocale(lang.value)
-    })
-
     var install = document.createElement('button')
     install.className = 'act primary'
     install.addEventListener('click', function () { doInstall(install) })
@@ -238,13 +233,12 @@
     close.className = 'close'
     close.addEventListener('click', function () { toggle(false) })
 
-    actions.appendChild(lang)
+    actions.appendChild(install)
     actions.appendChild(problems)
     actions.appendChild(reload)
     actions.appendChild(openDir)
     actions.appendChild(browseWs)
     actions.appendChild(installWs)
-    actions.appendChild(install)
     actions.appendChild(close)
     footer.appendChild(note)
     footer.appendChild(actions)
@@ -273,7 +267,6 @@
     overlay._problems = problems
     overlay._close = close
     overlay._title = h2
-    overlay._lang = lang
 
     if (SMLN.i18n && typeof SMLN.i18n.onChange === 'function') {
       SMLN.i18n.onChange(function () { paintChrome(); render() })
@@ -299,18 +292,6 @@
       ? tx('problems.badge', n + ' problem(s)', { count: n })
       : tx('problems.button', 'Problems')
     overlay._problems.className = 'act' + (p.summary && p.summary.errors ? ' alert' : '')
-
-    var sel = overlay._lang
-    while (sel.firstChild) sel.removeChild(sel.firstChild)
-    var locales = (SMLN.i18n && SMLN.i18n.locales && SMLN.i18n.locales()) || []
-    var active = (SMLN.i18n && SMLN.i18n.locale && SMLN.i18n.locale()) || 'en'
-    for (var i = 0; i < locales.length; i++) {
-      var opt = document.createElement('option')
-      opt.value = locales[i].code
-      opt.textContent = locales[i].nativeName || locales[i].code
-      if (locales[i].code === active) opt.selected = true
-      sel.appendChild(opt)
-    }
   }
 
   function say(text, kind) {

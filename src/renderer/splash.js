@@ -456,8 +456,11 @@
 
   // The game API arriving is worth a line: it is the hook everything else
   // depends on, and its absence is the single most useful thing to see.
+  // game:ready and game:started both emit 'ready'; one line is enough.
+  var capturedShown = false
   SMLN.on('ready', function () {
-    if (done) return
+    if (done || capturedShown) return
+    capturedShown = true
     var fh = SMLN.game
     push(line('ok', (t('splash.captured') || 'game API captured') +
       (fh ? '  (' + Object.keys(fh).length + ' namespaces)' : '')))

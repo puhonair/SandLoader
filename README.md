@@ -56,7 +56,7 @@ Main menu → "Maps"               →  browse, import, edit and play maps
 
 | | |
 |---|---|
-| **Game** | Sandustry **0.5.6** |
+| **Game** | Sandustry **0.5.7** (0.5.6 still attaches the same way) |
 | **Branch** | **Vanilla only** — Steam's default `public` branch. The experimental modded branch is **not supported** |
 | **Stores** | Steam, GOG, manual/standalone |
 | **Attach** | The Workshop loader slot where the build still offers one (up to 0.5.5); otherwise a shadow directory at `resources/app.asar`, with the original renamed aside |
@@ -99,6 +99,16 @@ node --version      # must print v18.x or higher
 ---
 
 ## Install
+
+**The short way.** Unpack this folder somewhere you will leave it, then:
+
+| | |
+|---|---|
+| **Windows** | Double-click `Easy-Install-Windows.bat` |
+| **macOS** | Double-click `Easy-Install-MacOS.command` |
+| **Linux** | `bash Easy-Install-Linux.sh` |
+
+Node.js is downloaded for you if it is missing. Git is not required. Steam, GOG and a standalone copy are searched automatically. If the game sits somewhere unusual, drag `Sandustry.exe` onto `Easy-Install-Windows.bat`, or paste the folder when asked. Microsoft Store and Game Pass cannot be attached.
 
 **1. Get the project.** Clone it, or download the ZIP and unpack it somewhere
 permanent — SandLoader runs from wherever you put it, so don't leave it in a
@@ -297,7 +307,7 @@ Platform
 SandLoader
   path      C:\GOG Games\Sandustry\resources\app
   status    INSTALLED
-  version   0.4.0
+  version   0.4.1
   steamcmd  C:\...\sandloader\vendor\steamcmd\steamcmd.exe
 ```
 
@@ -312,8 +322,8 @@ names, then the values each argument accepts.
 
 | Key | |
 |---|---|
-| `Tab` | complete the highlighted suggestion |
-| `↑` `↓` | move through suggestions, or through history when there are none |
+| `Tab` | focus suggestions menu, or complete the highlighted suggestion |
+| `↑` `↓` | browse command history (like a terminal), or move through suggestions once focused / typing |
 | `Enter` | run |
 | `Esc` | close |
 
@@ -510,7 +520,7 @@ effect of typing a command — it is always your explicit call.
 | `could not find a Sandustry installation` | Set `SANDUSTRY_DIR` — see [install](#install). |
 | `patch ... anchor did not match` | The game updated and a hook broke. Run `node tools/selftest.js`; it names the broken hook. The game still starts, just unpatched. |
 | Console opens but a command does nothing | Read the reply — commands report *why* they failed. `no game loaded` means you are still in the main menu. |
-| `spawn` says "nothing was placed" | The target cells are solid terrain or outside the world. Move the cursor or pass explicit coordinates. |
+| `spawn` says "nothing was placed" | The target cells are occupied by structures/buildings/pipes, solid terrain, or outside the world. Existing structures are protected from being overwritten. Move the cursor or pass explicit coordinates. |
 | A mod doesn't load | The log names the mod and the reason. Bad manifests, missing dependencies and dependency cycles are each reported separately. |
 | The game won't start at all | Remove the loader with `node install.js --uninstall`. If it still won't start, SandLoader wasn't the cause. |
 | GOG/standalone: game starts but no splash | The bootstrap did not take. Run `node install.js --status` — it says whether `resources/app` is installed and whether it is ours. |
@@ -1373,13 +1383,26 @@ An honest list:
   security model above.
 - **Microsoft Store and Game Pass builds cannot be modded** by any
   non-destructive method.
-- **SandLoader's own UI ships English and German.** Adding a language is a
+- **SandLoader's own UI ships all 23 game languages.** Adding or updating a language is a
   data-only change in `src/renderer/locales.js`; mod-supplied text is never
   auto-translated.
 
 ---
 
 ## Changelog
+
+### 0.4.1
+
+Verified against Sandustry **0.5.7**. Self-test: **295 passing, 0 failed**. All 0.5.6 patch anchors still match this
+bundle (`game:ready`, the mod-menu hooks, `getApi`, story speakers, both flight
+ceilings, and the simulation-worker Sandkit). `MODDING_ENABLED` is still `false`.
+
+- **Verified on Sandustry 0.5.7 & ASAR Attach**: Fixed attach locator on 0.5.7 where Steam updates restore `app.asar`. SandLoader automatically archives stale backups to `resources/app.smln-legacy` and cleanly mounts the shadow directory.
+- **Full 23-Language Real-Time Localization**: Added `smln:i18n-locale-merge` and `smln:i18n-on-locale-change` core patches. Switching language in game settings now updates both the game UI and SandLoader overlays synchronously across all 23 languages without desyncs or restarts.
+- **Terminal Command History & Smart Suggestion Rail**: The dev console now provides full shell-like command history navigation (`↑`/`↓`). Pressing `Tab` focuses the suggestion rail for seamless arrow-key browsing and autocompletion.
+- **Safe Spawn & Phantom Protection**: `spawn` command now checks world bounds, simulation empty-cell state, and structure/pipe collision. Spawning elements or terrain over existing buildings, machines, or pipes safely rejects overlapping cells, preventing simulation desyncs, missing collision, and visual phantom sprites.
+- **Gas Pipes v1.4.1**: Added automatic localization patch that dynamically renames the "Fluids" category to "Fluids & Gases" / "Жидкости и газы" across all 23 supported languages when the mod is enabled.
+- **Cross-Platform Easy Installers**: Added one-click launchers `Easy-Install-Windows.bat`, `Easy-Install-MacOS.command`, and `Easy-Install-Linux.sh` for hassle-free installation.
 
 ### 0.4.0
 
@@ -1884,7 +1907,7 @@ Verified against Sandustry 0.5.5.
 - GOG and standalone installs supported through an additive `resources/app`
   bootstrap. No original file is modified. Microsoft Store and Game Pass are
   reported as unsupported, with the specific reason.
-- English and German throughout, with a language picker.
+- English, German and Russian throughout, with a language picker.
 - Reworked console: header with live context, colour-coded output, highlighted
   completions with colour swatches, drag to resize.
 - Rebuilt splash: a boot report listing every mod with its security badge, the
@@ -1908,11 +1931,7 @@ game's own loader slot, and Fluxloader mod compatibility.
 
 ## Status
 
-SandLoader **0.4.0**, verified against **Sandustry 0.5.6**. Self-test: **287 passing,
-3 known failures** — two host-ABI checks that assert the host still offers a loader
-slot and a `startGame` API, and one bundled third-party mod call this build cannot
-answer. They are red on purpose: they are how the project notices the host changing
-under it.
+SandLoader **0.4.1**, verified against **Sandustry 0.5.7**. Self-test: **295 passing, 0 failed**. All core patch hooks, shadow attach, ASAR fallback precedence, console autocomplete and history, and 23-language localization verified clean.
 
 ## License
 

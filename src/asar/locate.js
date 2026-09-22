@@ -107,10 +107,24 @@ function candidates() {
     push('C:\\Program Files (x86)\\Steam\\steamapps\\common\\Sandustry', 'conventional')
     push('C:\\Program Files\\Sandustry', 'conventional')
     push(path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Sandustry'), 'conventional')
+    const pf = process.env.ProgramFiles
+    const pf86 = process.env['ProgramFiles(x86)']
+    if (pf) push(path.join(pf, 'GOG Galaxy', 'Games', 'Sandustry'), 'conventional')
+    if (pf86) push(path.join(pf86, 'GOG Galaxy', 'Games', 'Sandustry'), 'conventional')
+    for (const drive of ['C:\\', 'D:\\', 'E:\\', 'F:\\']) {
+      push(path.join(drive, 'GOG Games', 'Sandustry'), 'conventional')
+      push(path.join(drive, 'GOG Galaxy', 'Games', 'Sandustry'), 'conventional')
+      push(path.join(drive, 'Games', 'Sandustry'), 'conventional')
+    }
   } else if (process.platform === 'darwin') {
     push('/Applications/Sandustry.app/Contents', 'conventional')
+    push(path.join(os.homedir(), 'Applications', 'Sandustry.app', 'Contents'), 'conventional')
   } else {
-    push(path.join(os.homedir(), '.local/share/Sandustry'), 'conventional')
+    const home = os.homedir()
+    push(path.join(home, '.local/share/Sandustry'), 'conventional')
+    push(path.join(home, 'GOG Games', 'Sandustry'), 'conventional')
+    push(path.join(home, 'Games', 'Sandustry'), 'conventional')
+    push('/opt/Sandustry', 'conventional')
   }
 
   return out
@@ -144,13 +158,43 @@ function resolveThroughShadow(candidate) {
 }
 
 /**
+ * Which archive holds the game when nothing has written a shadow receipt.
+ *
+ * Electron searches `resources/app.asar` before `resources/app`. SandLoader
+ * 0.3 renamed the archive to `game.asar` so a `resources/app` bootstrap could
+ * load; a later Steam update puts a fresh `app.asar` back beside that
+ * leftover. The restored archive is the one the executable actually runs.
+ * Preferring the leftover launches the previous game version and patches it,
+ * while the new `app.asar` starts unmodded.
+ *
+ * A directory at `app.asar` is a shadow stub, not the game. With no receipt
+ * the parked original answers to `app.smln-original.asar`.
+ *
+ * @param {string} resources
+ * @returns {string}
+ */
+function fallbackArchive(resources) {
+  const appAsar = path.join(resources, 'app.asar')
+  const parked = path.join(resources, 'app' + shadow.SUFFIX + '.asar')
+  const gameAsar = path.join(resources, 'game.asar')
+  try {
+    if (fs.statSync(appAsar).isFile()) return appAsar
+  } catch (_) { /* absent, or a directory: the stub, not the archive */ }
+  if (fs.existsSync(parked)) return parked
+  if (fs.existsSync(gameAsar)) return gameAsar
+  return appAsar
+}
+
+/**
  * Validate one directory. Returns null when it is not a Sandustry install.
  * @param {string} dir @param {string} source @returns {GameInstall|null}
  */
 function inspect(dir, source) {
   try {
     const resources = path.join(dir, "resources")
-    for (const name of ["game.asar", "app.asar"]) {
+    // app.asar first: it is the name Electron loads. game.asar is only the
+    // live archive on the 0.3 layout, where app.asar was renamed away.
+    for (const name of ["app.asar", "game.asar"]) {
       const asar = resolveThroughShadow(path.join(resources, name))
       if (!asar) continue
       const previous = process.noAsar
@@ -231,5 +275,5 @@ function workshopDir() {
 
 module.exports = {
   locate, tryLocate, inspect, candidates, steamLibraries, workshopDir,
-  resolveThroughShadow, APP_ID,
+  resolveThroughShadow, fallbackArchive, APP_ID,
 }

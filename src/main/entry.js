@@ -214,6 +214,11 @@ function applyModStates(mods) {
   for (const mod of mods) {
     if (Object.prototype.hasOwnProperty.call(runtime.modStates, mod.id)) {
       mod.enabled = runtime.modStates[mod.id] !== false
+    } else {
+      // A mod the player has never toggled stays installed and off. Discovery
+      // treats a silent manifest as enabled, which turned the bundled examples
+      // on the first time the loader booted.
+      mod.enabled = false
     }
   }
   return mods
@@ -1421,6 +1426,25 @@ function assemble() {
     note(toSmlnError(e, 'fluxloader compatibility'), 'fluxloader')
   }
 
+  // The renderer always asks for captured Fluxloader content once the game is
+  // ready, including when no such mod is installed. The real handler is
+  // registered only inside loadElectronEntrypoints, so with an empty mod list
+  // the call fell through to "unknown action" and the bridge logged an error
+  // about a request that had nothing to deliver. An empty payload is the
+  // honest answer; a later load of an actual mod replaces this handler.
+  if (!runtime.rpcActions.has('smln:flux-content')) {
+    rpcRegistry.register('smln:flux-content', () => ({
+      elements: [],
+      soils: [],
+      blocks: [],
+      tech: [],
+      upgrades: [],
+      recipes: [],
+      elementTypes: enums.ElementByName,
+      unsupported: [],
+    }))
+  }
+
   // ---- official Sandustry mods (manifestVersion 1)
   try {
     // Whether this build runs official mods at all is a property of the game,
@@ -1832,7 +1856,7 @@ async function startManager() {
     const { app, protocol } = require("electron")
     const distDir = runtime.install
       ? runtime.install.distDir
-      : path.join(process.resourcesPath || "", fs.existsSync(path.join(process.resourcesPath || "", "game.asar")) ? "game.asar" : "app.asar", "dist")
+      : path.join(locate.fallbackArchive(process.resourcesPath || ""), "dist")
 
     // Register the interceptor on app ready before the game main.js opens a window
     app.whenReady().then(() => {

@@ -402,6 +402,7 @@ function makeElement(tag, doc) {
     },
 
     querySelector(sel) { return doc._find(this, sel) },
+    querySelectorAll(sel) { return doc._findAll(this, sel) },
     closest() { return null },
   }
   el.classList = { ...el.classList, _set: new Set() }
@@ -437,23 +438,40 @@ function createDom() {
     },
     addEventListener() {},
     _find(root, sel) {
-      // Only #id and .class are used by the console.
       const walk = (node, out) => {
         for (const c of node.childNodes || []) { out.push(c); walk(c, out) }
         return out
       }
-      const pool = walk(root, []).concat(doc._all)
+      const pool = walk(root, [])
       if (sel.startsWith('#')) return pool.find((e) => e.id === sel.slice(1)) || null
-      if (sel.startsWith('.')) return pool.find((e) => (e.className || '').split(/\s+/).includes(sel.slice(1))) || null
+      if (sel.startsWith('.')) {
+        const classes = sel.split('.').filter(Boolean)
+        return pool.find((e) => classes.every((name) => (e.className || '').split(/\s+/).includes(name))) || null
+      }
       return null
+    },
+    _findAll(root, sel) {
+      const walk = (node, out) => {
+        for (const c of node.childNodes || []) { out.push(c); walk(c, out) }
+        return out
+      }
+      const pool = walk(root, [])
+      if (sel.startsWith('#')) return pool.filter((e) => e.id === sel.slice(1))
+      if (sel.startsWith('.')) {
+        const classes = sel.split('.').filter(Boolean)
+        return pool.filter((e) => classes.every((name) => (e.className || '').split(/\s+/).includes(name)))
+      }
+      return []
     },
   }
   doc.head = makeElement('head', doc)
   doc.body = makeElement('body', doc)
   doc.querySelector = (sel) => doc._find(doc.body, sel)
+  doc.querySelectorAll = (sel) => doc._findAll(doc.body, sel)
   doc.getElementById = (id) => doc._all.find((e) => e.id === id) || null
 
   const win = {
+    document: doc,
     _listeners: Object.create(null),
     addEventListener(type, fn) { (win._listeners[type] || (win._listeners[type] = [])).push(fn) },
     removeEventListener() {},
