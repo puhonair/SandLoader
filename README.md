@@ -1,16 +1,22 @@
 # SandLoader
 
+[![Sandustry Version](https://img.shields.io/badge/Sandustry-0.5.7%20%7C%200.5.6-blue.svg)](https://store.steampowered.com/app/2764460/Sandustry/)
+[![SandLoader Release](https://img.shields.io/badge/SandLoader-v0.4.1-brightgreen.svg)](https://github.com/LopeKinz/SandLoader/releases)
+[![Tests](https://img.shields.io/badge/tests-295%20passed-success.svg)](tools/selftest.js)
+[![Languages](https://img.shields.io/badge/languages-23%20supported-orange.svg)](#requirements)
+[![License](https://img.shields.io/badge/license-MIT-informational.svg)](LICENSE)
+
 A mod loader for **[Sandustry](https://store.steampowered.com/app/2764460/Sandustry/)** with an
-in-game console, a mod manager, and support for existing
+in-game console, a mod manager, 23-language localization, and support for existing
 [Fluxloader](https://fluxloader.app/) mods.
 
 **No file's content is ever modified.** Patching happens in memory while the game
 loads, so a game update can never leave a broken patched file behind. Where the
 build still offers a loader slot, nothing in the install is touched at all.
-Sandustry **0.5.6** removed that slot, so there SandLoader renames `app.asar`
-aside and puts a directory of its own in its place — renaming the two paths back
-is the uninstall, and Steam's *Verify integrity of game files* undoes it
-(`node install.js --repair` puts it back).
+Starting with Sandustry **0.5.6+ (including 0.5.7)**, the game removed that slot,
+so there SandLoader renames `app.asar` aside and puts a directory of its own in
+its place — renaming the two paths back is the uninstall, and Steam's *Verify
+integrity of game files* undoes it (`node install.js --repair` puts it back).
 
 Works on **Steam**, **GOG** and **manual/standalone** installs.
 
@@ -18,9 +24,10 @@ Works on **Steam**, **GOG** and **manual/standalone** installs.
 experimental modded branch ships a different Sandkit generation and is not supported.
 
 ```
-Press  ^  (or F1) in game        →  console
-Main menu → "SandLoader Mods"    →  install / enable / remove mods
-Main menu → "Maps"               →  browse, import, edit and play maps
+Double-click Easy-Install-Windows.bat / .command / .sh  →  one-click installer
+Press  ^  (or F1) in game                              →  console (with history & autocomplete)
+Main menu → "SandLoader Mods"                          →  install / enable / remove mods
+Main menu → "Maps"                                     →  browse, import, edit and play maps
 ```
 
 ---
@@ -56,10 +63,11 @@ Main menu → "Maps"               →  browse, import, edit and play maps
 
 | | |
 |---|---|
-| **Game** | Sandustry **0.5.7** (0.5.6 still attaches the same way) |
+| **Game** | Sandustry **0.5.7** (also compatible with 0.5.6 and legacy 0.5.5) |
 | **Branch** | **Vanilla only** — Steam's default `public` branch. The experimental modded branch is **not supported** |
 | **Stores** | Steam, GOG, manual/standalone |
-| **Attach** | The Workshop loader slot where the build still offers one (up to 0.5.5); otherwise a shadow directory at `resources/app.asar`, with the original renamed aside |
+| **Attach** | On **0.5.6+ (including 0.5.7)**: a shadow directory at `resources/app.asar`, with the original renamed aside; on legacy builds (up to 0.5.5) the Workshop loader slot where offered |
+| **Languages** | **All 23 game languages** supported with synchronous real-time UI switching |
 | **OS** | Windows, Linux or macOS |
 | **Node.js** | **18 or newer**, only to run the installer — [nodejs.org](https://nodejs.org) |
 
@@ -67,7 +75,7 @@ Main menu → "Maps"               →  browse, import, edit and play maps
 
 | Store | Status | How SandLoader attaches |
 |---|---|---|
-| **Steam** | supported | the game's own Workshop loader slot where the build still offers one (up to 0.5.5); on 0.5.6 a shadow `app.asar` directory, with the original renamed aside |
+| **Steam** | supported | on 0.5.6+ (including 0.5.7) a shadow `app.asar` directory, with the original renamed aside; on legacy builds (up to 0.5.5) the game's own Workshop loader slot where offered |
 | **GOG** | supported | an added `resources/app/` bootstrap — no original file is modified |
 | **Manual / standalone** | supported | same bootstrap |
 | **Microsoft Store** | **not supported** | package is ACL-protected and signature-verified |
@@ -75,7 +83,7 @@ Main menu → "Maps"               →  browse, import, edit and play maps
 
 Up to 0.5.5, Sandustry scanned for a mod loader on Steam and nowhere else — its
 own `main.js` started that check with `if (PLATFORM_NAME !== 'steam') return
-null`. **0.5.6 removed the scan entirely**, so on every store SandLoader now
+null`. **0.5.6 removed the scan entirely** (continuing in 0.5.7), so on every store SandLoader now
 supplies its own entry point by adding a directory Electron already looks for:
 `resources/app/` on GOG and standalone builds, and on Steam a directory that
 takes over the `app.asar` name with the original renamed aside. No file's
@@ -130,7 +138,7 @@ The installer detects your build and picks the right attach point on its own.
 On **Steam** you should see:
 
 ```
-  game      sandustry 0.5.6
+  game      sandustry 0.5.7
   at        C:\Program Files (x86)\Steam\steamapps\common\Sandustry
   platform  steam (certain)  -  resources/steam_appid.txt
   attach    asar-shadow-directory
@@ -150,7 +158,7 @@ On **Steam** you should see:
 On **GOG** or a standalone copy:
 
 ```
-  game      sandustry 0.5.6
+  game      sandustry 0.5.7
   at        C:\GOG Games\Sandustry
   platform  gog (certain)  -  goggame-1234567890.info beside the executable
   attach    resources-app-bootstrap
@@ -331,7 +339,7 @@ names, then the values each argument accepts.
 
 | Command | What it does |
 |---|---|
-| `spawn <material> [radius] [x] [y]` | Place any material at your cursor. Works for elements *and* terrain. |
+| `spawn <material> [radius] [x] [y]` | Place any material at your cursor safely. Checks world bounds and skips cells occupied by structures or pipes to prevent visual phantoms. Works for elements *and* terrain. |
 | `give <resource> <amount>` | Add to a resource. |
 | `set <resource> <amount>` | Set a resource to an exact value. |
 | `resources` | Show every resource this save has. |
@@ -542,10 +550,15 @@ end-to-end, and tells you exactly what broke.
 
 **Does this modify my game files?**
 No. Not one byte. Patching happens in memory as files are served to the renderer.
+Where path redirection is used on Steam, original files are safely renamed aside,
+never modified.
 
 **Will Steam file verification flag it?**
-No, because nothing in the game folder changes. On Steam, SandLoader lives in the
-Workshop content folder.
+Steam's *Verify integrity of game files* checks the checksum of `app.asar` and will
+restore the clean vanilla `app.asar` archive. If you ever run verification,
+simply run `node install.js` (or `node install.js --repair` / `Easy-Install-Windows.bat`),
+which will re-archive stale backups and cleanly restore the loader mount in seconds.
+Saves, custom maps, and mods remain completely untouched.
 
 **What about GOG?**
 Supported. Since GOG builds never scan for a loader, SandLoader adds its own
@@ -1087,12 +1100,12 @@ That is the **game's ABI** — the contract a host offers a loader. SandLoader
 implements it directly. It shares no code with the Fluxloader project; it answers
 the same phone number, and separately knows how to read Fluxloader's mods. Two
 self-test checks still ask the installed build for that slot and that ABI, and
-on 0.5.6 they fail on purpose: that is how the project finds out the day a host
+on 0.5.6+ (including 0.5.7) they fail on purpose: that is how the project finds out the day a host
 stops offering them.
 
 ### Everywhere else — which is now everywhere — SandLoader brings its own
 
-That Workshop scan was Steam-gated and 0.5.6 dropped it, so on GOG, standalone
+That Workshop scan was Steam-gated and 0.5.6 dropped it (and 0.5.7 continues without it), so on GOG, standalone
 and now Steam nothing ever looks for a loader. There SandLoader adds a
 `resources/app/` directory: Electron
 resolves its app package by searching `resources/` for `app`, then `app.asar`,
@@ -1305,7 +1318,7 @@ An honest list:
 
 - **Sandustry 0.5.6 removed the loader slot.** Up to 0.5.5 the game's own
   `main.js` scanned the Steam Workshop for a loader and drove it through six
-  calls. On 0.5.6 none of that is left, so SandLoader attaches by taking over
+  calls. On 0.5.6 (and 0.5.7) none of that is left, so SandLoader attaches by taking over
   the `app.asar` name instead: the original archive is renamed to
   `app.smln-original.asar`, its `.unpacked` sibling moves with it, and a
   three-file directory takes their place. No file's content is modified and
@@ -1314,13 +1327,13 @@ An honest list:
   files* undoes it; `node install.js --repair` puts the pieces back.
 - **The game has its own modding system now, switched off.** 0.5.6 ships
   Workshop discovery, patch sets, a local `mods` folder and a protocol
-  interceptor behind `const MODDING_ENABLED = false`. Nothing SandLoader does
+  interceptor behind `const MODDING_ENABLED = false` (still disabled in 0.5.7). Nothing SandLoader does
   turns it on, and if a later build enables it that deserves designing for
   properly rather than bolting on.
 
 - **Recipes work on 0.5.6, and only there.** 0.5.6 added a recipe registry with
   nine machine categories — contacts, shakers, kineticPresses, growers,
-  condensers, steamDryers, synthesizers, snowmakers and smelters.
+  condensers, steamDryers, synthesizers, snowmakers and smelters (and this registry continues into 0.5.7).
   `SMLN.register.recipe()` registers into it, and corelib's four recipe kinds
   are translated onto three of them: shakers, kinetic presses and growers (the
   game calls the grower machine `planterBox`). Contact recipes - element meets
@@ -1342,7 +1355,7 @@ An honest list:
   `workerEntry` running in the utility worker still gets messaging and no more.
 - **Fluxloader worker mods are translated, not run.** They call corelib, and
   corelib's worker API is built from `exposed.raw` - filled by a patch against
-  `js/336.bundle.js`, a chunk Sandustry 0.5.6 no longer emits. Nothing can
+  `js/336.bundle.js`, a chunk Sandustry 0.5.6+ no longer emits. Nothing can
   revive that, so SandLoader publishes `corelib` and `fluxloaderAPI` itself,
   with the calls the bundled mods make reimplemented against the game's worker
   API. corelib's own worker entry is skipped, because its last line would
@@ -1385,7 +1398,7 @@ An honest list:
   non-destructive method.
 - **SandLoader's own UI ships all 23 game languages.** Adding or updating a language is a
   data-only change in `src/renderer/locales.js`; mod-supplied text is never
-  auto-translated.
+  auto-translated. Dynamic locale switching hooks synchronize language changes instantly across both game and loader interfaces.
 
 ---
 
@@ -1931,7 +1944,7 @@ game's own loader slot, and Fluxloader mod compatibility.
 
 ## Status
 
-SandLoader **0.4.1**, verified against **Sandustry 0.5.7**. Self-test: **295 passing, 0 failed**. All core patch hooks, shadow attach, ASAR fallback precedence, console autocomplete and history, and 23-language localization verified clean.
+SandLoader **0.4.1**, verified against **Sandustry 0.5.7** (and compatible with 0.5.6). Self-test: **295 passing, 0 failed**. All core patch hooks, shadow attach, ASAR fallback precedence, console autocomplete and history, and 23-language localization verified clean.
 
 ## License
 
