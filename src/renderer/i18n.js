@@ -121,6 +121,10 @@
 
   function pickInitialLocale() {
     try {
+      var explicit = canonicalLocale(global.__SMLN_LOCALE__)
+      if (explicit) return explicit
+    } catch (_) {}
+    try {
       var nav = canonicalLocale(global.navigator && global.navigator.language)
       if (nav) return nav
     } catch (_) {}
