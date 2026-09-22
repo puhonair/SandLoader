@@ -79,7 +79,10 @@
 
     // position:relative so the new-map prompt can cover the panel and only
     // the panel.
-    '#smln-maps .panel{position:relative;width:min(1040px,95vw);max-height:86vh;display:flex;flex-direction:column;',
+    // Tall enough that the new-map card fits over it. The panel used to be
+    // only as high as the list, and overflow:hidden then cut the form off.
+    '#smln-maps .panel{position:relative;width:min(1040px,95vw);height:min(860px,92vh);',
+    'max-height:92vh;min-height:min(680px,92vh);display:flex;flex-direction:column;',
     'background:rgba(8,12,17,.97);border:1px solid rgba(100,116,139,.68);',
     'border-radius:0 8px 0 8px;box-shadow:0 4px 12px rgba(0,0,0,.28);overflow:hidden}',
 
@@ -181,11 +184,12 @@
 
     // --- the new-map prompt: a card over the panel, so the list and the
     // preview stay where they were rather than being replaced by a form.
-    '#smln-maps .prompt{position:absolute;inset:0;display:flex;align-items:center;',
-    'justify-content:center;background:rgba(3,6,10,.8);z-index:1}',
-    '#smln-maps .prompt .card{width:min(420px,90%);padding:22px 24px;',
+    '#smln-maps .prompt{position:absolute;inset:0;display:flex;flex-direction:column;',
+    'align-items:center;justify-content:flex-start;overflow-y:auto;',
+    'padding:28px 16px;box-sizing:border-box;background:rgba(3,6,10,.8);z-index:1}',
+    '#smln-maps .prompt .card{width:min(420px,100%);margin:auto;padding:22px 24px;',
     'background:rgba(8,12,17,.99);border:1px solid rgba(100,116,139,.68);',
-    'border-radius:0 8px 0 8px}',
+    'border-radius:0 8px 0 8px;flex:none}',
     '#smln-maps .prompt h3{margin:0 0 14px;font-size:13px;font-weight:700;letter-spacing:.14em;',
     'text-transform:uppercase;color:#ffe700}',
     '#smln-maps .prompt label{display:block;color:#94a3b8;font-size:11px;letter-spacing:.09em;',
@@ -227,7 +231,6 @@
 
     var header = document.createElement('header')
     var h2 = document.createElement('h2')
-    h2.textContent = tx('maps.title', 'Maps')
     var count = document.createElement('span')
     count.className = 'count'
     header.appendChild(h2)
@@ -250,29 +253,24 @@
     note.className = 'note'
     var close = document.createElement('button')
     close.className = 'close'
-    close.textContent = tx('maps.close', 'Close')
     close.addEventListener('click', function () { toggle(false) })
     var importBtn = document.createElement('button')
     importBtn.className = 'import'
-    importBtn.textContent = tx('maps.import', 'Import map...')
     importBtn.addEventListener('click', function () { importMaps(importBtn) })
     // Beside Import, sharing its style, because they are the same gesture in
     // two directions - and it acts on the selection, so it starts disabled.
     var exportBtn = document.createElement('button')
     exportBtn.className = 'import export'
     exportBtn.disabled = true
-    exportBtn.textContent = tx('maps.export', 'Export map...')
     exportBtn.addEventListener('click', function () { exportMap(exportBtn) })
     var newBtn = document.createElement('button')
     newBtn.className = 'import'
-    newBtn.textContent = tx('maps.newMap', 'New map...')
     newBtn.addEventListener('click', function () { promptNewMap() })
     // Beside New map, because they are the same gesture - "start something" -
     // and an author who wants a world rather than a canvas should not have to
     // find their way into the editor first to discover that this exists.
     var genBtn = document.createElement('button')
     genBtn.className = 'import generate'
-    genBtn.textContent = tx('maps.generateMap', 'Generate map...')
     genBtn.addEventListener('click', function () { generateMap() })
     footer.appendChild(note)
     footer.appendChild(newBtn)
@@ -297,10 +295,45 @@
     overlay._stage = stage
     overlay._note = note
     overlay._panel = panel
+    overlay._title = h2
+    overlay._close = close
+    overlay._import = importBtn
     overlay._export = exportBtn
+    overlay._new = newBtn
+    overlay._generate = genBtn
 
+    paintChrome()
     renderList()
     renderStage()
+  }
+
+  /** Header, footer and an open new-map card. Re-run on a language change. */
+  function paintChrome() {
+    if (!overlay) return
+    overlay._title.textContent = tx('maps.title', 'Maps')
+    overlay._close.textContent = tx('maps.close', 'Close')
+    overlay._import.textContent = tx('maps.import', 'Import map...')
+    overlay._export.textContent = tx('maps.export', 'Export map...')
+    overlay._new.textContent = tx('maps.newMap', 'New map...')
+    overlay._generate.textContent = tx('maps.generateMap', 'Generate map...')
+    paintPrompt()
+  }
+
+  function paintPrompt() {
+    var prompt = overlay && overlay._prompt
+    if (!prompt) return
+    prompt._title.textContent = tx('maps.newTitle', 'New map')
+    prompt._nameLabel.textContent = tx('maps.newName', 'Name')
+    prompt._widthLabel.textContent = tx('maps.newWidth', 'Width (cells)')
+    prompt._heightLabel.textContent = tx('maps.newHeight', 'Height (cells)')
+    prompt._cancel.textContent = tx('maps.cancel', 'Cancel')
+    prompt._create.textContent = tx('maps.create', 'Create')
+    var nextDefault = tx('maps.newNameDefault', 'Untitled map')
+    if (prompt._name.value === prompt._nameDefault) {
+      prompt._name.value = nextDefault
+      prompt._nameDefault = nextDefault
+    }
+    if (typeof prompt._showCost === 'function') prompt._showCost()
   }
 
   // ---------------------------------------------------------- the editor
@@ -391,21 +424,19 @@
     card.className = 'card'
 
     var h3 = document.createElement('h3')
-    h3.textContent = tx('maps.newTitle', 'New map')
     card.appendChild(h3)
 
-    function field(labelText, value, parent) {
+    function field(parent) {
       var label = document.createElement('label')
-      label.textContent = labelText
       var input = document.createElement('input')
       input.type = 'text'
-      input.value = value
       parent.appendChild(label)
       parent.appendChild(input)
-      return input
+      return { label: label, input: input }
     }
 
-    var nameInput = field(tx('maps.newName', 'Name'), tx('maps.newNameDefault', 'Untitled map'), card)
+    var nameField = field(card)
+    var nameInput = nameField.input
 
     var pair = document.createElement('div')
     pair.className = 'pair'
@@ -414,10 +445,12 @@
     pair.appendChild(wcell)
     pair.appendChild(hcell)
     var limits = editorLimits()
-    var widthInput = field(tx('maps.newWidth', 'Width (cells)'),
-      String(limits.defaultWidth), wcell)
-    var heightInput = field(tx('maps.newHeight', 'Height (cells)'),
-      String(limits.defaultHeight), hcell)
+    var widthField = field(wcell)
+    var heightField = field(hcell)
+    var widthInput = widthField.input
+    var heightInput = heightField.input
+    widthInput.value = String(limits.defaultWidth)
+    heightInput.value = String(limits.defaultHeight)
     card.appendChild(pair)
 
     var hint = document.createElement('div')
@@ -466,7 +499,7 @@
         hint.className = 'hint err'
         hint.textContent = tx('maps.newTooSmall',
           'At least ' + limits.minWidth + ' × ' + limits.minHeight + ' cells. ' + limits.reason,
-          { width: limits.minWidth, height: limits.minHeight })
+          { width: limits.minWidth, height: limits.minHeight, reason: limits.reason || '' })
         return
       }
       // The upper bound is memory, not the game's per-axis limit, so it is a
@@ -480,7 +513,11 @@
           'layers plus a display copy and stops at ' + Math.round(limits.maxCells / 1e6) +
           ' million - about ' + Math.round(Math.sqrt(limits.maxCells)) + ' by ' +
           Math.round(Math.sqrt(limits.maxCells)) + ', or 8000 by 2000.',
-          { cells: Math.round(limits.maxCells / 1e6) })
+          {
+            cells: Math.round(w * h / 1e6),
+            max: Math.round(limits.maxCells / 1e6),
+            side: Math.round(Math.sqrt(limits.maxCells)),
+          })
         return
       }
       closePrompt()
@@ -491,8 +528,18 @@
     card.appendChild(row)
 
     wrap.appendChild(card)
+    wrap._title = h3
+    wrap._nameLabel = nameField.label
+    wrap._widthLabel = widthField.label
+    wrap._heightLabel = heightField.label
+    wrap._cancel = cancel
+    wrap._create = create
+    wrap._name = nameInput
+    wrap._nameDefault = ''
+    wrap._showCost = showCost
     overlay._panel.appendChild(wrap)
     overlay._prompt = wrap
+    paintPrompt()
     if (nameInput.focus) nameInput.focus()
   }
 
@@ -566,7 +613,7 @@
 
     var api = mapsApi()
     if (!api || typeof api.load !== 'function') {
-      previews[id] = { status: 'error', error: tx('maps.noBridge', 'this build cannot load map previews') }
+      previews[id] = { status: 'error', error: tx('maps.noPreview', 'this build cannot load map previews') }
       if (id === selectedId) renderStage()
       return
     }
@@ -942,6 +989,18 @@
     ev.preventDefault()
     ev.stopPropagation()
     toggle(false)
+  }
+
+  function applyLocale() {
+    SMLN.mapsLabel = tx('maps.title', 'Maps')
+    if (!overlay) return
+    paintChrome()
+    renderList()
+    renderStage()
+  }
+  applyLocale()
+  if (SMLN.i18n && typeof SMLN.i18n.onChange === 'function') {
+    SMLN.i18n.onChange(applyLocale)
   }
 
   SMLN.mapsUI = {

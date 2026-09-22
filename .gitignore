@@ -21,3 +21,10 @@ Fluxloader mods/
 # Untracked by hand until now, which only held because nothing ever ran
 # `git add -A`. Naming it here is what actually keeps it out.
 mod-creator/
+
+# Development probes and reverse-engineering scratch files
+tools/_*
+out.txt
+selftest-output.txt
+temp_selftest.txt
+

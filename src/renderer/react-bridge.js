@@ -75,38 +75,52 @@
    */
   var cached = null
   var cachedDom = null
-  var attempted = false
+  var logged = false
+  var warned = false
 
-  function resolve() {
-    if (attempted) return
-    attempted = true
+  /**
+   * @param {boolean} report  Warn only from the post-boot call. An earlier
+   *   caller — a mod script that runs before the game bundle — must not
+   *   freeze a miss or announce it.
+   */
+  function resolve(report) {
+    if (cached) return
 
     // An explicit global wins: a future build exposing React deliberately
     // should be believed over our archaeology.
     if (isReact(global.React)) cached = global.React
     if (isReactDom(global.ReactDOM)) cachedDom = global.ReactDOM
-    if (cached && cachedDom) return
 
-    var out = extract()
-    cached = cached || out.react
-    cachedDom = cachedDom || out.dom
+    var out = null
+    if (!(cached && cachedDom)) {
+      out = extract()
+      cached = cached || out.react
+      cachedDom = cachedDom || out.dom
+    }
 
     if (cached) {
-      SMLN.log('info', 'react bridge ready (React ' + (cached.version || 'unknown') +
-        ', react-dom ' + (cachedDom ? 'available' : 'unavailable') + ')')
-    } else {
-      SMLN.log('warn', 'react bridge could not reach the game React: ' + out.why +
+      if (!logged) {
+        logged = true
+        SMLN.log('info', 'react bridge ready (React ' + (cached.version || 'unknown') +
+          ', react-dom ' + (cachedDom ? 'available' : 'unavailable') + ')')
+      }
+      return
+    }
+    if (report && !warned) {
+      warned = true
+      SMLN.log('warn', 'react bridge could not reach the game React: ' +
+        ((out && out.why) || 'no webpack bridge') +
         ' - mods that draw UI will not start')
     }
   }
 
   function getReact() {
-    if (!cached) resolve()
+    if (!cached) resolve(false)
     return cached
   }
 
   function getReactDom() {
-    if (!cachedDom) resolve()
+    if (!cachedDom) resolve(false)
     return cachedDom
   }
 
@@ -114,7 +128,7 @@
 
   // Resolve once the bundle has run, so the first mod to ask does not pay for
   // the scan and any failure is reported at a predictable point.
-  if (typeof SMLN.on === 'function') SMLN.on('ready', function () { getReact() })
+  if (typeof SMLN.on === 'function') SMLN.on('ready', function () { resolve(true) })
 
   SMLN.log('info', 'react bridge installed')
 })(typeof globalThis !== 'undefined' ? globalThis : window)

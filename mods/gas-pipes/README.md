@@ -1,27 +1,27 @@
-# Gas Pipes 1.4.0
+# Gas Pipes 1.4.1
 
-Extends Sandustry's existing **Pump -> Pipe(s) -> Liquid Vent** water network so
-it can also move elements whose live definition has `matterType === Gas`.
+Lets the ordinary **Pump -> Pipe(s) -> Liquid Vent** network carry gas as well
+as liquid. There is no separate gas pipe.
 
-## What changed in 1.4.0
+## What changed in 1.4.1
 
-1.3.0 looked for a `waterBuffer++` operation that does not exist in the current
-vanilla Pump implementation. The current game increments a local moved-count and
-uses `waterBuffer` only for output shortfall. As a result, 1.3.0 could resolve
-zero Pump candidates and contribute zero patches.
+Sandustry 0.5.7 replaced the water counter. The pump keeps a `liquidBuffer`
+keyed by element type, and its intake predicate is "not Lava, and the cell's
+`matterType` is Liquid". 1.4.0 anchored on the old `waterBuffer` path, so on
+0.5.7 it resolved nothing and installed no patch.
 
-1.4.0 resolves the real recurring Pump path and modifies it atomically in its
-own lexical scope:
+1.4.1 widens that one predicate to Liquid or Gas, still refusing Lava. The
+buffer, the vent and the pipe graph are the game's. A network that moves gas
+takes the gas element's own `metaColor` for a couple of seconds, which is the
+same overlay the game already uses for the last liquid.
 
-- Water still uses the same vanilla Pump / Pipe / Liquid Vent network.
-- Gas is accepted by the same intake scan.
-- The exact input element type is kept in a FIFO buffer.
-- The source cell is cleared with the actual old element type.
-- The Liquid Vent creates the same type using Sandustry's own element factory.
-- Buffered output preserves types across ticks.
+1.4.1 keeps the pump's own rectangle. Gas is taken from those cells and no
+others, the same way water is. Put the pump in the steam, under the ceiling,
+the way you put it in a pool on the floor. The build category is renamed from
+Fluids to Liquids and gases while the mod is loaded.
 
-On the currently inspected 0.5.4 bundle, Steam and Fire are Gas. The mod checks
-the game's live matter-definition table rather than relying only on those names.
+Steam and Fire are whatever the live matter table says is Gas. The patch does
+not hardcode their ids.
 
 ## Install
 

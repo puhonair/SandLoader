@@ -285,6 +285,11 @@
     if (!s) return null
     var cs = cellSize() || 4
 
+    var cellPos = dig(s, 'session.input.mouse.cellPosition')
+    if (cellPos && isFinite(cellPos.x) && isFinite(cellPos.y)) {
+      return { x: cellPos.x, y: cellPos.y, from: 'cursor' }
+    }
+
     var mouse = dig(s, 'session.input.mouse.worldPosition')
     if (mouse && isFinite(mouse.x) && isFinite(mouse.y)) {
       return { x: Math.round(mouse.x / cs), y: Math.round(mouse.y / cs), from: 'cursor' }
@@ -299,6 +304,79 @@
       }
     }
     return null
+  }
+
+  /**
+   * Check whether a coordinate is within the world boundaries.
+   */
+  function isInsideWorld(s, x, y) {
+    if (x < 0 || y < 0) return false
+    var f = FH()
+    try {
+      if (f && f.world && typeof f.world.getDimensions === 'function') {
+        var d = f.world.getDimensions(s)
+        if (d && isFinite(d.widthCells) && isFinite(d.heightCells)) {
+          if (x >= d.widthCells || y >= d.heightCells) return false
+        }
+      }
+    } catch (_) {}
+    return true
+  }
+
+  /**
+   * Check whether a cell is occupied by any structure, building or pipe.
+   * Overwriting these with elements or terrain removes them from the simulation
+   * grid while leaving orphaned renderer sprites ("phantoms") behind.
+   */
+  function isCellBlockedByStructure(s, x, y) {
+    var f = FH()
+    if (!f) return false
+    try {
+      if (f.structures) {
+        if (typeof f.structures.hasBuiltAtCell === 'function' && f.structures.hasBuiltAtCell(s, x, y)) {
+          return true
+        }
+        if (typeof f.structures.getAtCell === 'function' && f.structures.getAtCell(s, x, y)) {
+          return true
+        }
+      }
+    } catch (_) {}
+    try {
+      if (f.pipes && typeof f.pipes.isAt === 'function' && f.pipes.isAt(s, x, y)) {
+        return true
+      }
+    } catch (_) {}
+    try {
+      if (SMLN.api) {
+        if (SMLN.api.structures) {
+          if (typeof SMLN.api.structures.hasBuiltAtCell === 'function' && SMLN.api.structures.hasBuiltAtCell(x, y)) return true
+          if (typeof SMLN.api.structures.getAtCell === 'function' && SMLN.api.structures.getAtCell(x, y)) return true
+        }
+        if (SMLN.api.pipes && typeof SMLN.api.pipes.isAt === 'function' && SMLN.api.pipes.isAt(x, y)) return true
+      }
+    } catch (_) {}
+    return false
+  }
+
+  /**
+   * Check whether a cell is empty in the simulation grid (i.e. cellId === 0).
+   * Elements can only safely spawn into empty cells.
+   */
+  function isCellEmpty(s, x, y) {
+    var f = FH()
+    if (!f) return true
+    try {
+      if (f.world) {
+        if (typeof f.world.isCellEmpty === 'function') return !!f.world.isCellEmpty(s, x, y)
+        if (typeof f.world.isCellEmptyAtCell === 'function') return !!f.world.isCellEmptyAtCell(s, x, y)
+      }
+    } catch (_) {}
+    try {
+      if (SMLN.api && SMLN.api.world && typeof SMLN.api.world.isCellEmpty === 'function') {
+        return !!SMLN.api.world.isCellEmpty(x, y)
+      }
+    } catch (_) {}
+    return true
   }
 
   // ---------------------------------------------------------------- commands
@@ -364,44 +442,95 @@
 
       var f = FH()
       var s = state()
-      var place, label
+      var place, canPlace, label
 
       if (el) {
         if (!f || !f.elements || typeof f.elements.createAt !== 'function') {
           return ['element API unavailable (FH.elements.createAt missing)']
         }
         label = el.name
+        canPlace = function (x, y) {
+          if (!isInsideWorld(s, x, y)) return false
+          if (isCellBlockedByStructure(s, x, y)) return false
+          if (!isCellEmpty(s, x, y)) return false
+          return true
+        }
         place = function (x, y) { f.elements.createAt(s, x, y, el.id, {}) }
       } else {
         if (!f || !f.terrains || typeof f.terrains.createAt !== 'function') {
           return ['terrain API unavailable (FH.terrains.createAt missing)']
         }
         label = terrain + ' (terrain)'
+        canPlace = function (x, y) {
+          if (!isInsideWorld(s, x, y)) return false
+          if (isCellBlockedByStructure(s, x, y)) return false
+          try {
+            if (f.player && typeof f.player.isCollidingWithCell === 'function' && f.player.isCollidingWithCell(s, x, y)) {
+              return false
+            }
+          } catch (_) {}
+          return true
+        }
         // Terrains are addressed by name, not by numeric id.
         place = function (x, y) { f.terrains.createAt(s, x, y, terrain) }
       }
 
       var placed = 0, failed = 0, firstError = null
+      var touched = []
       for (var dx = -radius; dx <= radius; dx++) {
         for (var dy = -radius; dy <= radius; dy++) {
           if (dx * dx + dy * dy > radius * radius) continue
-          try { place(origin.x + dx, origin.y + dy); placed++ }
+          var cx = origin.x + dx
+          var cy = origin.y + dy
+          if (!canPlace(cx, cy)) {
+            failed++
+            continue
+          }
+          try { place(cx, cy); placed++; touched.push(cx, cy) }
           catch (e) { failed++; if (!firstError) firstError = e && e.message }
         }
       }
+      var outlines = refreshSpawnOutlines(s, touched)
       SMLN.refreshUI()
 
       if (!placed) {
         return ['nothing was placed at ' + origin.x + ',' + origin.y + ' (' + failed + ' cell(s) rejected)',
           firstError ? 'first error: ' + firstError
-            : 'the area may be solid terrain, or outside the world']
+            : 'the area may be occupied by structures, solid terrain, or outside the world']
       }
       var note = markCheatUsed()
       return ['spawned ' + placed + ' x ' + label + ' at ' + origin.x + ',' + origin.y +
         (origin.from ? ' (' + origin.from + ')' : '') +
-        (failed ? ', ' + failed + ' cell(s) rejected' : '') + note]
+        (failed ? ', ' + failed + ' cell(s) rejected' : '') +
+        (outlines ? '' : ' (wall outlines were not refreshed)') + note]
     },
   })
+
+  /**
+   * The black edge on a wall is a shadow byte. It is sampled from cells up to
+   * 8 away, and createAt only refreshes the written cell — and only when the
+   * new id is still terrain. An element spawn therefore leaves the
+   * neighbouring wall and foundation cells with a stale edge, and the outline
+   * vanishes. The game already exposes the neighbourhood pass as
+   * `shadows.refreshRect` (the 8 is its own default padding).
+   */
+  function refreshSpawnOutlines(state, coords) {
+    if (!state || !coords || !coords.length) return false
+    var api = FH()
+    var rect = api && api.shadows && api.shadows.refreshRect
+    if (typeof rect !== 'function') return false
+    var minX = coords[0], maxX = coords[0], minY = coords[1], maxY = coords[1]
+    for (var i = 2; i < coords.length; i += 2) {
+      var x = coords[i]
+      var y = coords[i + 1]
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
+    }
+    try { rect(state, minX, minY, maxX, maxY, 8); return true }
+    catch (_) { return false }
+  }
 
   define({
     name: 'give',
@@ -941,8 +1070,12 @@
       })
     }
     if (!lower) filtered = candidates.filter(function (c) { return c.value })
+    // Every match stays in the list. The rail already scrolls (`.rows` is
+    // overflow:auto inside the console), so a hard cut only hid the tail:
+    // with 16 commands the last four — shims, sim, spawn, tech — never
+    // appeared, and the footer counted 12.
     return {
-      items: filtered.slice(0, 12),
+      items: filtered,
       typing: typing,
       tokenStart: caret - typing.length,
       label: label,
@@ -955,6 +1088,7 @@
   var ui = {}
   var history = []
   var historyIndex = -1
+  var historyDraft = ''
   var sugg = { items: [], selected: 0, typing: '', tokenStart: 0, label: '', total: 0 }
   var open = false
 
@@ -1163,7 +1297,10 @@
     ui.meta = meta
     ui.grip = root.firstChild
 
-    ui.input.addEventListener('input', refreshSuggestions)
+    ui.input.addEventListener('input', function () {
+      historyIndex = -1
+      refreshSuggestions()
+    })
     // NOTE: no keydown listener here on purpose. A capture-phase listener on
     // `window` runs first and must stopPropagation() to keep keys away from
     // the game - which also prevents them from ever reaching this element. All
@@ -1258,7 +1395,8 @@
     sugg.tokenStart = r.tokenStart
     sugg.label = r.label
     sugg.total = r.total
-    if (sugg.selected >= sugg.items.length) sugg.selected = 0
+    // Nothing is highlighted until Tab. Arrows belong to command history.
+    sugg.selected = -1
     renderSuggestions()
     renderGhost()
   }
@@ -1270,7 +1408,7 @@
    */
   function renderGhost() {
     if (!ui.ghost) return
-    var c = sugg.items[sugg.selected]
+    var c = sugg.selected >= 0 ? sugg.items[sugg.selected] : sugg.items[0]
     var value = ui.input.value
     if (!c || !c.value || !sugg.typing || c.value.indexOf(sugg.typing) !== 0) {
       ui.ghost.textContent = ''
@@ -1309,7 +1447,7 @@
     var selected = null
     sugg.items.forEach(function (c, i) {
       var row = document.createElement('div')
-      row.className = 's' + (i === sugg.selected ? ' sel' : '')
+      row.className = 's' + (sugg.selected >= 0 && i === sugg.selected ? ' sel' : '')
       row.dataset.i = String(i)
       if (i === sugg.selected) selected = row
 
@@ -1352,9 +1490,11 @@
     if (foot) {
       while (foot.firstChild) foot.removeChild(foot.firstChild)
       var left = document.createElement('span')
-      left.textContent = (sugg.selected + 1) + ' / ' + sugg.items.length
+      left.textContent = sugg.selected >= 0
+        ? ((sugg.selected + 1) + ' / ' + sugg.items.length)
+        : String(sugg.items.length)
       var right = document.createElement('span')
-      right.textContent = 'Tab accept   ↑↓ move'
+      right.textContent = sugg.selected >= 0 ? 'Tab/Enter accept   ↑↓ move' : 'Tab complete   ↑↓ history'
       foot.appendChild(left)
       foot.appendChild(right)
     }
@@ -1362,14 +1502,15 @@
     if (selected && selected.scrollIntoView) selected.scrollIntoView({ block: 'nearest' })
   }
 
-  function acceptSuggestion() {
-    var c = sugg.items[sugg.selected]
+  function acceptSuggestion(index) {
+    var idx = typeof index === 'number' ? index : (sugg.selected >= 0 ? sugg.selected : 0)
+    var c = sugg.items[idx]
     if (!c || !c.value) return false
     var v = ui.input.value
     var next = v.slice(0, sugg.tokenStart) + c.value + v.slice(sugg.tokenStart + sugg.typing.length)
     if (!next.endsWith(' ')) next += ' '
     ui.input.value = next
-    ui.input.setSelectionRange(next.length, next.length)
+    if (ui.input.setSelectionRange) ui.input.setSelectionRange(next.length, next.length)
     refreshSuggestions()
     return true
   }
@@ -1378,41 +1519,65 @@
     // Everything typed into the console stays in the console.
     ev.stopPropagation()
 
-    if (ev.key === 'Escape') { ev.preventDefault(); toggle(false); return }
+    if (ev.key === 'Escape') {
+      ev.preventDefault()
+      if (sugg.selected >= 0) {
+        sugg.selected = -1
+        renderSuggestions()
+        renderGhost()
+        return
+      }
+      toggle(false)
+      return
+    }
 
     if (ev.key === 'Tab') {
       ev.preventDefault()
-      if (sugg.items.length) {
-        if (ev.shiftKey) sugg.selected = (sugg.selected - 1 + sugg.items.length) % sugg.items.length
-        else if (sugg.items.length === 1 || sugg.typing) { acceptSuggestion(); return }
-        else sugg.selected = (sugg.selected + 1) % sugg.items.length
-        renderSuggestions()
+      if (!sugg.items.length) return
+      // When suggestion rail is active, Tab accepts the currently focused suggestion.
+      if (sugg.selected >= 0) {
+        acceptSuggestion()
+        return
       }
+      // If typing a token or single match, Tab completes it immediately.
+      if (!ev.shiftKey && (sugg.items.length === 1 || sugg.typing)) {
+        acceptSuggestion(0)
+        return
+      }
+      // Otherwise, activate the suggestion rail.
+      sugg.selected = ev.shiftKey ? sugg.items.length - 1 : 0
+      renderSuggestions()
+      renderGhost()
       return
     }
 
     if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
-      var dir = ev.key === 'ArrowDown' ? 1 : -1
-      if (sugg.items.length > 1) {
-        ev.preventDefault()
-        sugg.selected = (sugg.selected + dir + sugg.items.length) % sugg.items.length
+      ev.preventDefault()
+      // When a suggestion is active (focused via Tab), arrows navigate the suggestion rail.
+      if (sugg.selected >= 0 && sugg.items.length > 0) {
+        var delta = ev.key === 'ArrowUp' ? -1 : 1
+        sugg.selected = (sugg.selected + delta + sugg.items.length) % sugg.items.length
         renderSuggestions()
+        renderGhost()
         return
       }
-      // No suggestion list to navigate - fall back to command history.
-      ev.preventDefault()
+
+      // Otherwise, arrows navigate command history!
       if (!history.length) return
-      historyIndex = Math.max(0, Math.min(history.length - 1, historyIndex - dir))
-      ui.input.value = history[historyIndex] || ''
-      ui.input.setSelectionRange(ui.input.value.length, ui.input.value.length)
+      if (historyIndex < 0 || historyIndex >= history.length) historyDraft = ui.input.value
+      var dir = ev.key === 'ArrowUp' ? -1 : 1
+      var next = historyIndex < 0 ? (dir < 0 ? history.length - 1 : history.length) : historyIndex + dir
+      historyIndex = Math.max(0, Math.min(history.length, next))
+      ui.input.value = historyIndex >= history.length ? historyDraft : (history[historyIndex] || '')
+      if (ui.input.setSelectionRange) ui.input.setSelectionRange(ui.input.value.length, ui.input.value.length)
       refreshSuggestions()
       return
     }
 
     if (ev.key === 'Enter') {
       ev.preventDefault()
-      // A highlighted, not-yet-typed suggestion completes instead of running.
-      if (sugg.items.length && sugg.selected > 0 && sugg.items[sugg.selected].value !== sugg.typing) {
+      // If a suggestion was actively focused via Tab/arrows, Enter accepts it into the input.
+      if (sugg.selected >= 0 && sugg.items.length > 0) {
         acceptSuggestion()
         return
       }
@@ -1428,6 +1593,7 @@
     history.push(line)
     if (history.length > 100) history.shift()
     historyIndex = history.length
+    historyDraft = ''
     print('> ' + line, 'u')
     run(line)
   }
@@ -1445,9 +1611,11 @@
       var out = cmd.run.call(cmd, parts.slice(1))
       if (Array.isArray(out)) out.forEach(function (l) { print(l) })
       else if (typeof out === 'string') print(out)
+      return out
     } catch (e) {
       print('command failed: ' + (e && e.message), 'e')
       SMLN.log('error', 'console command "' + parts[0] + '" threw', e && e.stack)
+      return ['command failed: ' + (e && e.message)]
     }
   }
 

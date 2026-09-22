@@ -54,6 +54,13 @@ const BUNDLE = 'fluxloader.bundle.js'
 const MODINFO = 'modinfo.json'
 
 function say(...a) { console.log(...a) }
+
+/** The Node binary that is running this file, quoted so the command works when it is not on PATH. */
+function rerun(args) {
+  const exe = '"' + process.execPath + '"'
+  const script = '"' + path.join(__dirname, 'install.js') + '"'
+  return exe + ' ' + script + (args ? ' ' + args : '')
+}
 function fail(msg, hint) {
   console.error('\n  ERROR  ' + msg)
   if (hint) console.error('         ' + String(hint).split('\n').join('\n         '))
@@ -175,7 +182,7 @@ function receiptSource(install, version, originalArchive) {
     installedAt: new Date().toISOString(),
     gameVersion: install.version,
     originalArchive,
-    note: 'Uninstall with "node install.js --uninstall". No original file was modified; ' +
+    note: 'Uninstall with ' + rerun('--uninstall') + '. No original file was modified; ' +
       'the original archive was renamed to the path in originalArchive.',
   }, null, 2) + '\n'
 }
@@ -207,6 +214,37 @@ function realPackage(install) {
   } catch (_) { return null }
 }
 
+/**
+ * SandLoader 0.3 attached by adding `resources/app`, which Electron only
+ * reaches when `app.asar` is absent. A Steam update puts `app.asar` back, so
+ * that directory is ignored — until something removes `app.asar` again, when
+ * it would boot the old loader against the leftover `game.asar`. Move it
+ * aside. Only a directory this project wrote is touched.
+ *
+ * @param {string} resources
+ * @returns {string|null} where it went, if it moved
+ */
+function parkLegacyBootstrap(resources) {
+  const legacy = path.join(resources, 'app')
+  let isDir = false
+  try { isDir = fs.statSync(legacy).isDirectory() } catch (_) { return null }
+  if (!isDir) return null
+
+  let ours = fs.existsSync(path.join(legacy, 'smln-bootstrap.js'))
+  if (!ours && fs.existsSync(path.join(legacy, 'package.json'))) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(legacy, 'package.json'), 'utf8'))
+      ours = !!(pkg && (pkg.smlnBootstrap || pkg.main === 'smln-bootstrap.js'))
+    } catch (_) { ours = false }
+  }
+  if (!ours) return null
+
+  let dest = path.join(resources, 'app.smln-legacy')
+  if (fs.existsSync(dest)) dest = path.join(resources, 'app.smln-legacy-' + Date.now())
+  fs.renameSync(legacy, dest)
+  return dest
+}
+
 function installShadow(install, plat, version) {
   if (gameIsRunning()) {
     fail('Sandustry is running.', 'Close the game first - the attach renames files it holds open.')
@@ -221,8 +259,25 @@ function installShadow(install, plat, version) {
     const back = shadow.revert(plat.resources, plat.base)
     if (!back.ok) { fail('could not remove the previous attach: ' + back.error.message); return false }
   } else if (state !== 'clean') {
-    fail('the install is in the "' + state + '" state.', 'Run: node install.js --repair')
+    fail('the install is in the "' + state + '" state.', 'Run: ' + rerun('--repair'))
     return false
+  }
+
+  // Only when the shadow takes the name Electron searches for. On a
+  // game.asar-only layout, resources/app is the live entry point.
+  let legacyParked = null
+  if (plat.base === 'app') {
+    try {
+      legacyParked = parkLegacyBootstrap(plat.resources)
+    } catch (e) {
+      fail('could not move the old resources/app bootstrap aside: ' + e.message)
+      return false
+    }
+  }
+  if (legacyParked) {
+    say('  legacy    ' + legacyParked)
+    say('            the 0.3 resources/app bootstrap was moved aside so Electron')
+    say('            cannot boot it against the leftover game.asar')
   }
 
   const bootPath = path.resolve(__dirname, 'src', 'boot', 'bootstrap.js')
@@ -233,6 +288,9 @@ function installShadow(install, plat, version) {
   })
 
   if (!out.ok) {
+    if (legacyParked) {
+      try { fs.renameSync(legacyParked, path.join(plat.resources, 'app')) } catch (_) { /* report the attach error */ }
+    }
     const e = out.error
     if (e && (e.code === 'EACCES' || e.code === 'EPERM')) {
       fail('no permission to change the game directory.',
@@ -248,7 +306,7 @@ function installShadow(install, plat, version) {
   say('  loader    ' + bootPath)
   say('')
   say("  Installed. No file's content was modified; two paths were renamed.")
-  say('  Uninstall with: node install.js --uninstall')
+  say('  Uninstall with: ' + rerun('--uninstall'))
   say('')
   return true
 }
@@ -287,7 +345,7 @@ function repair() {
     say('  Steam restored ' + paths.slot + '; our copy of the original is an orphan.')
     try { fs.rmSync(paths.parked, { force: true }) } catch (e) { fail('could not remove it: ' + e.message); return }
     try { fs.rmSync(paths.parkedUnpacked, { recursive: true, force: true }) } catch (_) { /* may not exist */ }
-    say('  Removed the orphan. Reinstall with: node install.js')
+    say('  Removed the orphan. Reinstall with: ' + rerun())
     say('')
     return
   }
@@ -297,7 +355,7 @@ function repair() {
       fs.renameSync(paths.parked, paths.slot)
       if (fs.existsSync(paths.parkedUnpacked)) fs.renameSync(paths.parkedUnpacked, paths.liveUnpacked)
     } catch (e) { fail('could not put the original back: ' + e.message); return }
-    say('  Put the original archive back. Reinstall with: node install.js')
+    say('  Put the original archive back. Reinstall with: ' + rerun())
     say('')
     return
   }
@@ -305,7 +363,7 @@ function repair() {
   if (state === 'broken') {
     fail('the original archive is gone - SandLoader cannot restore it.',
       'Use the Steam client to verify the game files, or reinstall the game, then run:' +
-      String.fromCharCode(10) + '  node install.js --uninstall && node install.js')
+      String.fromCharCode(10) + '  ' + rerun('--uninstall') + ' && ' + rerun())
     return
   }
 
@@ -322,7 +380,7 @@ function repair() {
 function status() {
   attachStatus()
   const exe = steamcmd.find()
-  say('  steamcmd  ' + (exe || 'not installed  -  run: node install.js --steamcmd'))
+  say('  steamcmd  ' + (exe || 'not installed  -  run: ' + rerun('--steamcmd')))
   say('')
 }
 
@@ -387,7 +445,7 @@ function attachStatus() {
     } else if (state === 'clean') {
       say('  status    not installed')
     } else {
-      say('  status    NEEDS REPAIR  -  run: node install.js --repair')
+      say('  status    NEEDS REPAIR  -  run: ' + rerun('--repair'))
     }
     return
   }

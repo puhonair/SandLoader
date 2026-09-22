@@ -35,7 +35,6 @@
   var CHUNK_KEYS = ['webpackChunksand_v1', 'webpackChunksandustry', 'webpackChunk']
 
   var req = null
-  var attempted = false
   var failure = null
 
   function findChunkArray() {
@@ -57,14 +56,22 @@
 
   /**
    * Capture `__webpack_require__`. The callback runs synchronously inside
-   * push(), so `req` is set by the time this returns.
+   * push(), so `req` is set by the time a successful call returns.
+   *
+   * A miss is not remembered. The prelude runs mod scripts before the game
+   * bundle, and those scripts ask for the module graph immediately — the
+   * chunk array `self.webpackChunksand_v1` does not exist yet. Remembering
+   * that first miss made every later call, including the one after the
+   * bundle had installed the array, report "no webpack chunk array".
    */
   function acquire() {
-    if (attempted) return req
-    attempted = true
+    if (req) return req
 
     var chunks = findChunkArray()
-    if (!chunks) { failure = 'no webpack chunk array on this build'; return null }
+    if (!chunks) {
+      failure = 'no webpack chunk array on this build'
+      return null
+    }
 
     try {
       chunks.push([
@@ -77,7 +84,11 @@
       return null
     }
 
-    if (!req) failure = 'webpack accepted the chunk but handed back no require'
+    if (!req) {
+      failure = 'webpack accepted the chunk but handed back no require'
+      return null
+    }
+    failure = null
     return req
   }
 

@@ -378,6 +378,10 @@
     else global.removeEventListener('keydown', onKey, true)
   }
 
+  if (SMLN.i18n && typeof SMLN.i18n.onChange === 'function') {
+    SMLN.i18n.onChange(function () { if (overlay) render() })
+  }
+
   SMLN.settingsUI = {
     open: open,
     close: function () { toggle(false) },

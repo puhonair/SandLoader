@@ -66,8 +66,8 @@ function originalAppRoot(opts = {}) {
   }
   const resources = opts.resourcesPath || process.resourcesPath ||
     path.resolve(__dirname, '..', '..', '..')
-  const target = fs.existsSync(path.join(resources, 'game.asar')) ? 'game.asar' : 'app.asar'
-  return path.join(resources, target)
+  // A restored app.asar beats a leftover game.asar from the 0.3 rename.
+  return require('../asar/locate').fallbackArchive(resources)
 }
 
 /**

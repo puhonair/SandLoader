@@ -9,20 +9,17 @@
  * small - pick a locale, look a key up in a flat table, fill in `{name}`
  * placeholders - and does not need one.
  *
- * Locale selection, in priority order, decided once at install and possibly
- * revised once (see below):
+ * Locale selection follows Sandustry's own language setting. There is no
+ * separate SandLoader picker: whatever the player chose in the game's
+ * settings is the language of these menus too.
  *
- *   1. An explicit SandLoader preference, `global.__SMLN_LOCALE__`, which the
- *      main process injects into the prelude ahead of this file (may be
- *      absent - first run, or a build that has not wired it up yet).
- *   2. Sandustry's own active locale, if the game exposes it reliably. `FH`
- *      (published here as `SMLN.game`) does not exist until the core patch
- *      calls `__capture` at `game:ready` - long after this file has already
- *      run - so this cannot be checked at install time. It is re-checked
- *      once, from the runtime's `ready` event, and only takes effect if step
- *      1 did not already set an explicit preference.
- *   3. `navigator.language`, reduced to its primary subtag (`de-AT` -> `de`).
- *   4. `'en'`.
+ * The game API does not exist until `__capture` runs at `game:ready`, which
+ * is after this file has already installed. Until that moment the browser
+ * language is used so the first paint is not stuck on English, and from
+ * `ready` onward `FH.i18n.getLocale()` wins. It is polled, because changing
+ * the setting does not reload the page. A saved loader preference is ignored
+ * on purpose — it used to pin an old language after the player changed the
+ * game's.
  *
  * Fallback chain for a single lookup: active locale -> English -> the key
  * itself. A miss must never surface as the literal string "undefined" - that
@@ -60,49 +57,129 @@
     return out
   }
 
-  /** 'de-AT' -> 'de'; tolerates anything, including garbage or nothing. */
-  function primarySubtag(tag) {
+  /**
+   * Which plural slot a count uses.
+   *
+   * English and German only split 1 from everything else. Russian needs
+   * three: one (1, 21, 31, … but not 11), few (2–4, 22–24, …) and many
+   * (0, 5–20, 11–14, …). A catalogue that never filled the extra slots
+   * still resolves, because the lookup tries `.other` and the bare key next.
+   */
+  function pluralSlot(n, code) {
+    var abs = Math.abs(n)
+    var mod10 = abs % 10
+    var mod100 = abs % 100
+    // Russian and Ukrainian agree on integers: 1, 21, 31… are one (not 11);
+    // 2–4 are few (not 12–14); everything else is many.
+    if (code === 'ru' || code === 'uk') {
+      if (mod10 === 1 && mod100 !== 11) return 'one'
+      if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'few'
+      return 'many'
+    }
+    // Polish: only exactly 1 is one. 21 and 31 are many. 2–4 are few (not 12–14).
+    if (code === 'pl') {
+      if (abs === 1) return 'one'
+      if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'few'
+      return 'many'
+    }
+    // Czech: 1 is one, 2–4 are few, 0 and 5+ are other. 21 is not one.
+    if (code === 'cs') {
+      if (abs === 1) return 'one'
+      if (abs >= 2 && abs <= 4) return 'few'
+      return 'other'
+    }
+    return abs === 1 ? 'one' : 'other'
+  }
+
+  /**
+   * Game settings use the same codes as the locale files (zhCN, ptBR, esMX)
+   * and sometimes a BCP 47 tag (zh-CN, pt-BR). Both have to land on a
+   * catalogue we actually ship.
+   */
+  function canonicalLocale(tag) {
     if (!tag || typeof tag !== 'string') return ''
-    return tag.split(/[-_]/)[0].toLowerCase()
+    var lower = tag.replace(/_/g, '-').toLowerCase()
+    var exact = {
+      'zh-cn': 'zhCN', 'zhcn': 'zhCN', 'zh-hans': 'zhCN', 'zh-sg': 'zhCN',
+      'zh-tw': 'zhTW', 'zhtw': 'zhTW', 'zh-hk': 'zhTW', 'zh-hant': 'zhTW',
+      'pt-br': 'ptBR', 'ptbr': 'ptBR',
+      'pt-pt': 'ptPT', 'ptpt': 'ptPT',
+      'es-mx': 'esMX', 'esmx': 'esMX', 'es-419': 'esMX',
+      'nb': 'no', 'nn': 'no', 'nb-no': 'no', 'nn-no': 'no',
+    }
+    if (exact[lower] && hasLocale(exact[lower])) return exact[lower]
+    var primary = lower.split('-')[0]
+    if (primary === 'zh') return hasLocale('zhCN') ? 'zhCN' : ''
+    if (primary === 'pt') return hasLocale('ptPT') ? 'ptPT' : (hasLocale('ptBR') ? 'ptBR' : '')
+    if (hasLocale(primary)) return primary
+    var codes = Object.keys(LOCALES)
+    for (var i = 0; i < codes.length; i++) {
+      if (codes[i].toLowerCase() === lower.replace(/-/g, '')) return codes[i]
+    }
+    return ''
   }
 
   function pickInitialLocale() {
     try {
-      if (hasLocale(global.__SMLN_LOCALE__)) return global.__SMLN_LOCALE__
-    } catch (_) { /* reading a global should never throw, but nothing here may either */ }
-    try {
-      var nav = primarySubtag(global.navigator && global.navigator.language)
-      if (hasLocale(nav)) return nav
+      var nav = canonicalLocale(global.navigator && global.navigator.language)
+      if (nav) return nav
     } catch (_) {}
     return FALLBACK
   }
 
   var active = pickInitialLocale()
-  // True once a preference was set deliberately (step 1 above, or a later
-  // setLocale() call) - guards the one-time game-locale check below so it can
-  // only ever upgrade an unopinionated guess, never override a real choice.
-  var explicitPreference = hasLocale(global.__SMLN_LOCALE__)
 
   /**
-   * Re-check against Sandustry's own locale once the game API is captured.
-   * `SMLN.game` is null until then, so this cannot run any earlier than the
-   * runtime's `ready` event.
+   * SandLoader follows the language chosen in the game's own settings.
+   * A saved loader preference must not pin an old language after the player
+   * changes it there.
    */
-  function reevaluateAfterCapture() {
-    if (explicitPreference) return
+  function followGameLocale(explicitCode) {
     try {
-      if (SMLN.game && SMLN.game.i18n && typeof SMLN.game.i18n.getLocale === 'function') {
-        var gameLocale = primarySubtag(SMLN.game.i18n.getLocale())
-        if (hasLocale(gameLocale) && gameLocale !== active) {
-          active = gameLocale
-          notifyChange()
-        }
+      var raw = explicitCode
+      if (!raw && SMLN.game && SMLN.game.i18n && typeof SMLN.game.i18n.getLocale === 'function') {
+        raw = SMLN.game.i18n.getLocale()
       }
+      var code = canonicalLocale(raw)
+      if (!code || code === active) return
+      active = code
+      notifyChange()
     } catch (e) {
       SMLN.log && SMLN.log('warn', 'i18n: reading the game locale failed: ' + (e && e.message))
     }
   }
-  if (typeof SMLN.on === 'function') SMLN.on('ready', reevaluateAfterCapture)
+
+  function hookGameLocaleEvents() {
+    followGameLocale()
+    if (SMLN.game && SMLN.game.i18n) {
+      if (typeof SMLN.game.i18n.onLocaleChange === 'function') {
+        try {
+          SMLN.game.i18n.onLocaleChange(function (c) { followGameLocale(c) })
+        } catch (_) {}
+      }
+      if (typeof SMLN.game.i18n.setLocale === 'function' && !SMLN.game.i18n.__smlnWrapped) {
+        var origSetLocale = SMLN.game.i18n.setLocale
+        SMLN.game.i18n.setLocale = async function (next) {
+          try {
+            var res = await origSetLocale.apply(this, arguments)
+            followGameLocale(next)
+            return res
+          } catch (err) {
+            followGameLocale(next)
+            throw err
+          }
+        }
+        SMLN.game.i18n.__smlnWrapped = true
+      }
+    }
+  }
+
+  if (typeof SMLN.on === 'function') {
+    SMLN.on('ready', function () {
+      hookGameLocaleEvents()
+      if (global.setInterval) global.setInterval(followGameLocale, 1000)
+    })
+  }
 
   function lookupRaw(code, key) {
     var table = LOCALES[code]
@@ -126,7 +203,12 @@
     var candidates = [key]
     if (params && typeof params === 'object' && params.count !== undefined && params.count !== null) {
       var n = Number(params.count)
-      candidates = [isFinite(n) && Math.abs(n) === 1 ? key + '.one' : key + '.other', key]
+      if (isFinite(n)) {
+        var slot = pluralSlot(n, active)
+        candidates = [key + '.' + slot]
+        if (slot !== 'other') candidates.push(key + '.other')
+        candidates.push(key)
+      }
     }
     for (var i = 0; i < candidates.length; i++) {
       var v = lookupRaw(active, candidates[i])
@@ -186,6 +268,79 @@
     })
   }
 
+  function variantsOf(key, fallback) {
+    var out = []
+    var codes = Object.keys(LOCALES)
+    for (var i = 0; i < codes.length; i++) {
+      var value = lookupRaw(codes[i], key)
+      if (typeof value === 'string' && out.indexOf(value) < 0) out.push(value)
+    }
+    if (fallback && out.indexOf(fallback) < 0) out.push(fallback)
+    return out
+  }
+
+  /**
+   * The main menu is React. It reads menuLabel / mapsLabel while rendering
+   * and then keeps the text it wrote. A language switch has to edit those
+   * nodes itself, or the button stays in the previous language until the
+   * player leaves the menu and comes back.
+   */
+  function rewriteMenuText() {
+    var root = document.getElementById('ui')
+    if (!root || typeof document.createTreeWalker !== 'function') return
+    var modsFrom = variantsOf('mods.title', 'SandLoader Mods')
+    var vanillaMods = ['Mods', 'Модификации', 'SandLoader Mods']
+    for (var m = 0; m < vanillaMods.length; m++) {
+      if (modsFrom.indexOf(vanillaMods[m]) < 0) modsFrom.push(vanillaMods[m])
+    }
+
+    var mapsFrom = variantsOf('maps.title', 'Maps')
+    var vanillaMaps = [
+      'Maps', 'Карты', 'Karten', 'Cartes', 'Mapas', 'Mappe', 'Kaarten',
+      'Kort', 'Kartor', 'Kart', 'Kartat', 'Mapy', 'Карти', 'Térképek',
+      'Haritalar', 'マップ', '맵', '地图', '地圖'
+    ]
+    for (var p = 0; p < vanillaMaps.length; p++) {
+      if (mapsFrom.indexOf(vanillaMaps[p]) < 0) mapsFrom.push(vanillaMaps[p])
+    }
+
+    var jobs = []
+    if (SMLN.menuLabel) jobs.push({ from: modsFrom, to: SMLN.menuLabel })
+    if (SMLN.mapsLabel) jobs.push({ from: mapsFrom, to: SMLN.mapsLabel })
+    if (!jobs.length) return
+    var walker = document.createTreeWalker(root, 4)
+    var node = walker.nextNode()
+    while (node) {
+      var raw = node.nodeValue
+      var trimmed = raw && raw.trim()
+      if (trimmed) {
+        for (var j = 0; j < jobs.length; j++) {
+          if (trimmed === jobs[j].to) break
+          if (jobs[j].from.indexOf(trimmed) >= 0) {
+            node.nodeValue = raw.replace(trimmed, jobs[j].to)
+            break
+          }
+        }
+      }
+      node = walker.nextNode()
+    }
+  }
+
+  function rewriteMenuSoon() {
+    rewriteMenuText()
+    var raf = global.requestAnimationFrame
+    if (typeof raf === 'function') {
+      raf(function () {
+        rewriteMenuText()
+        raf(rewriteMenuText)
+      })
+    }
+    if (global.setTimeout) {
+      global.setTimeout(rewriteMenuText, 50)
+      global.setTimeout(rewriteMenuText, 200)
+    }
+  }
+
   function notifyChange() {
     for (var i = 0; i < changeListeners.length; i++) {
       try { changeListeners[i](active) } catch (e) {
@@ -193,6 +348,9 @@
         // able to wedge every other listener out of a language switch.
         SMLN.log && SMLN.log('error', 'i18n onChange listener threw: ' + (e && e.message))
       }
+    }
+    try { rewriteMenuSoon() } catch (e) {
+      SMLN.log && SMLN.log('warn', 'i18n: menu relabel failed: ' + (e && e.message))
     }
   }
 
@@ -204,14 +362,10 @@
    */
   function setLocale(code) {
     if (!hasLocale(code)) code = FALLBACK
-    explicitPreference = true
     var changed = code !== active
     active = code
-    try {
-      if (typeof SMLN.callMain === 'function') SMLN.callMain('setLoaderLocale', { locale: code })
-    } catch (e) {
-      SMLN.log && SMLN.log('warn', 'i18n: could not persist locale: ' + (e && e.message))
-    }
+    // Not persisted. The game setting is read again every second and would
+    // overwrite a private choice, so storing one would only lie about who won.
     if (changed) notifyChange()
   }
 

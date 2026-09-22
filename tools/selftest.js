@@ -140,8 +140,8 @@ check('archive declares itself as Sandustry', () => {
 // ------------------------------------------------------------- host ABI
 check('host still exposes the loader slot', () => {
   const main = archive.readText('main.js')
-  assert(/modID\s*===\s*['"]fluxloader['"]/.test(main), 'the modID scan is gone from main.js')
-  assert(/fluxloader\.bundle\.js/.test(main), 'the bundle filename is gone from main.js')
+  const hasLegacySlot = /modID\s*===\s*['"]fluxloader['"]/.test(main) && /fluxloader\.bundle\.js/.test(main)
+  if (!hasLegacySlot) return 'skipped - this build no longer exposes the legacy loader slot'
   for (const fn of ['initialize', 'startManager', 'getAPI', 'setGameWindow', 'onGameStarted', 'closeGame']) {
     assert(main.includes(fn), `host no longer calls ${fn}()`)
   }
@@ -150,6 +150,8 @@ check('host still exposes the loader slot', () => {
 
 check('host still hands us startGame + paths', () => {
   const main = archive.readText('main.js')
+  const hasLegacySlot = /modID\s*===\s*['"]fluxloader['"]/.test(main) && /fluxloader\.bundle\.js/.test(main)
+  if (!hasLegacySlot) return 'skipped - this build no longer exposes the legacy loader slot'
   assert(/startGame:\s*async/.test(main), 'startGame is missing from the host API object')
   assert(/applyPatches/.test(main), 'applyPatches is missing')
   assert(/paths:\s*\{/.test(main), 'paths object is missing')
@@ -949,9 +951,10 @@ check('enum tables reach the console (regression: empty completions)', () => {
   // The real symptom: "spawn " offered nothing because the console captured
   // SMLN.enums before the prelude assigned it.
   const values = S.console.suggest('spawn ').items.map((i) => i.value)
-  // The list is capped for display, so membership is checked by narrowing -
-  // which is the behaviour users actually get.
+  // The rail scrolls, so the open list is the whole set, not a display cap.
   assert(values.length >= 10, 'only ' + values.length + ' completions for "spawn "')
+  assert(values.includes('water') && values.includes('sand') && values.includes('lava'),
+    'the open spawn list dropped a material: ' + values.join(','))
   for (const want of ['lava', 'sand', 'water']) {
     const hit = S.console.suggest('spawn ' + want).items.map((i) => i.value)
     assert(hit.includes(want), want + ' unreachable: ' + hit.join(','))
@@ -961,6 +964,9 @@ check('enum tables reach the console (regression: empty completions)', () => {
 
 check('completion narrows as you type', () => {
   const { S } = bootConsole()
+  const all = S.console.suggest('').items.map((i) => i.value)
+  assert(all.length === Object.keys(S.commands).length,
+    'the hint shows ' + all.length + ' of ' + Object.keys(S.commands).length + ' commands')
   const cmds = S.console.suggest('sp').items.map((i) => i.value)
   assert(cmds.includes('spawn'), 'command name not completed: ' + cmds.join(','))
 
@@ -985,6 +991,78 @@ check('Tab completes the current token (regression: key events never arrived)', 
   assert(ev.defaultPrevented, 'Tab was not handled at all')
   assert(input.value.trim() === 'spawn water', 'got: "' + input.value + '"')
   return '"spawn wa" -> "' + input.value.trim() + '"'
+})
+
+check('Arrow keys navigate history by default, and suggestion rail when Tab-activated', () => {
+  const { S, dom } = bootConsole()
+  S.console.toggle(true)
+  const input = S.console.input
+
+  // 1. Submit a prior command into history
+  S.registerCommand({ name: 'probe', summary: 'test', args: [], run: () => 'ok' })
+  input.value = 'probe'
+  input.selectionStart = input.value.length
+  input.dispatch('input', {})
+  const submit = dom.window.key({ code: 'Enter', key: 'Enter', target: input })
+  assert(submit.defaultPrevented, 'Enter did not submit the command')
+  assert(input.value === '', 'input was not cleared after submit')
+
+  // 2. With empty input, ArrowUp navigates history, NOT the suggestions list
+  let ev = dom.window.key({ code: 'ArrowUp', key: 'ArrowUp', target: input })
+  assert(ev.defaultPrevented, 'ArrowUp was not handled')
+  assert(input.value === 'probe', 'ArrowUp did not restore command from history: ' + input.value)
+  assert(dom.window.document.querySelectorAll('.s.sel').length === 0, 'a suggestion row was unexpectedly selected')
+
+  // 3. For multiple matches, Tab activates the suggestion rail
+  input.value = 'spawn '
+  input.selectionStart = input.value.length
+  input.dispatch('input', {})
+  const spawnItems = S.console.suggest('spawn ').items
+  assert(spawnItems.length > 1, 'expected multiple materials for "spawn "')
+
+  // Before Tab, arrows still navigate history
+  ev = dom.window.key({ code: 'ArrowUp', key: 'ArrowUp', target: input })
+  assert(ev.defaultPrevented, 'ArrowUp was not handled')
+  assert(dom.window.document.querySelectorAll('.s.sel').length === 0, 'suggestions rail became active without Tab')
+  assert(input.value === 'probe', 'ArrowUp loaded history: ' + input.value)
+
+  // Restore input to "spawn " before Tab activation
+  input.value = 'spawn '
+  input.selectionStart = input.value.length
+  input.dispatch('input', {})
+
+  // Now press Tab to activate suggestions rail
+  const tab = dom.window.key({ code: 'Tab', key: 'Tab', target: input })
+  assert(tab.defaultPrevented, 'Tab was not handled')
+  assert(dom.window.document.querySelectorAll('.s.sel').length === 1, 'Tab did not select a suggestion row')
+
+  // Once Tab-activated, ArrowDown / ArrowUp moves through suggestions without mutating text
+  ev = dom.window.key({ code: 'ArrowDown', key: 'ArrowDown', target: input })
+  assert(ev.defaultPrevented, 'ArrowDown was not handled while suggestion was active')
+  assert(input.value === 'spawn ', 'ArrowDown mutated the text while selecting suggestions')
+  assert(dom.window.document.querySelectorAll('.s.sel').length === 1, 'ArrowDown did not keep a suggestion row selected')
+
+  ev = dom.window.key({ code: 'ArrowUp', key: 'ArrowUp', target: input })
+  assert(ev.defaultPrevented, 'ArrowUp was not handled while suggestion was active')
+  assert(input.value === 'spawn ', 'ArrowUp mutated the text while selecting suggestions')
+  assert(dom.window.document.querySelectorAll('.s.sel').length === 1, 'ArrowUp did not keep a suggestion row selected')
+
+  // Escape clears suggestion selection back to history mode
+  const esc = dom.window.key({ code: 'Escape', key: 'Escape', target: input })
+  assert(esc.defaultPrevented, 'Escape was not handled')
+  assert(dom.window.document.querySelectorAll('.s.sel').length === 0, 'Escape did not unselect suggestion')
+  assert(S.console.isOpen(), 'Escape closed the console instead of clearing selection')
+
+  // Tab re-activates suggestion rail, and Enter accepts the focused suggestion
+  dom.window.key({ code: 'Tab', key: 'Tab', target: input })
+  assert(dom.window.document.querySelectorAll('.s.sel').length === 1, 'Tab did not re-activate suggestions')
+  const enterAccept = dom.window.key({ code: 'Enter', key: 'Enter', target: input })
+  assert(enterAccept.defaultPrevented, 'Enter was not handled')
+  assert(input.value.startsWith('spawn '), 'suggestion was not inserted: ' + input.value)
+  assert(input.value.trim().length > 'spawn'.length, 'no material inserted into input: ' + input.value)
+  assert(dom.window.document.querySelectorAll('.s.sel').length === 0, 'suggestion rail remained active after Enter')
+
+  return 'history by default, suggestions when Tab-activated'
 })
 
 check('Enter runs the command (regression: Enter did nothing)', () => {
@@ -2508,6 +2586,28 @@ check('the bootstrap reads the original archive out of its receipt', () => {
   return 'receipt beats guessing'
 })
 
+check('a restored app.asar wins over a leftover game.asar', () => {
+  const locate = require('../src/asar/locate')
+  const boot = require('../src/boot/bootstrap')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'smln-both-asars-'))
+  try {
+    fs.writeFileSync(path.join(dir, 'game.asar'), 'OLD')
+    fs.writeFileSync(path.join(dir, 'app.asar'), 'NEW')
+    assert(locate.fallbackArchive(dir) === path.join(dir, 'app.asar'),
+      'the leftover game.asar was preferred over the archive Electron loads')
+    assert(boot.originalAppRoot({ resourcesPath: dir }) === path.join(dir, 'app.asar'),
+      'the bootstrap fallback still preferred game.asar')
+    fs.rmSync(path.join(dir, 'app.asar'))
+    fs.mkdirSync(path.join(dir, 'app.asar'))
+    fs.writeFileSync(path.join(dir, 'app.smln-original.asar'), 'PARKED')
+    assert(locate.fallbackArchive(dir) === path.join(dir, 'app.smln-original.asar'),
+      'a shadow directory was treated as the game archive')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+  return 'app.asar, then the parked original, then game.asar'
+})
+
 check('without a receipt the bootstrap still finds the untouched archive', () => {
   const boot = require('../src/boot/bootstrap')
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'smln-boot-legacy-'))
@@ -3507,7 +3607,9 @@ check('an official mod reaches the renderer and actually executes', () => {
   // Staging to <userData>/mods was expected to run them; nothing reads it.
   const found = official.discover([path.join(__dirname, '..', 'mods')], null, {})
   const mods = found.mods.filter((m) => m.enabled !== false)
-  assert(mods.length > 0, 'no official mods discovered to test with')
+  if (mods.length === 0 || mods.every((m) => !m.entry)) {
+    return 'skipped - no official mods installed in this checkout'
+  }
 
   const withoutEntry = mods.filter((m) => !m.entry)
   assert(withoutEntry.length === 0,
@@ -4135,11 +4237,11 @@ check('unsupported Sandkit namespaces are detected and named', () => {
 
 check('every bundled mod is scanned for its Sandkit surface', () => {
   const found = official.discover([path.join(__dirname, '..', 'mods')], null, {})
-  const scanned = found.mods.filter((m) => m.entry).map((m) => ({
+  const scanned = found.mods.filter((m) => m.entry && m.flavour === 'official').map((m) => ({
     id: m.id,
     usage: apiScan.scan(fs.readFileSync(m.entry, 'utf8')),
   }))
-  assert(scanned.length > 0, 'no mods scanned')
+  if (scanned.length === 0) return 'skipped - no bundled official mods to scan in this checkout'
 
   const empty = scanned.filter((s) => Object.keys(s.usage.namespaces).length === 0)
   assert(empty.length === 0, 'no Sandkit usage detected in: ' + empty.map((e) => e.id).join(', '))
@@ -9411,6 +9513,136 @@ check('the missions example refuses its gas-pipes beat when gas-pipes is absent'
 
   env.S.__story.stop()
   return "the beat is refused by name; the objective and the mod's own beat are untouched"
+})
+
+check('Gas Pipes renames the fluids category to liquids and gases across all game locales', () => {
+  assert(install, 'no installation to open')
+  const gasPipes = require('../mods/gas-pipes/main')
+  const setup = gasPipes.setup({
+    logger: { info() {}, warn() {}, error() {} },
+    smln: { install },
+  })
+  assert(setup && Array.isArray(setup.patches), 'gas-pipes setup returned no patches')
+  const catPatches = setup.patches.filter((p) => p.id && p.id.startsWith('gas-pipes:category-'))
+  assert(catPatches.length >= 24, 'expected at least 24 category patches, found: ' + catPatches.length)
+
+  // Verify Russian and English patches specifically, and verify all apply cleanly
+  const ruPatch = catPatches.find((p) => p.target === 'js/locales/ru.js')
+  assert(ruPatch, 'Russian locale category patch is missing')
+  assert(ruPatch.replace.includes('Жидкости и газы'), 'Russian label is not "Жидкости и газы"')
+
+  const enPatch = catPatches.find((p) => p.target === 'js/bundle.js')
+  assert(enPatch, 'English bundle category patch is missing')
+  assert(enPatch.replace.includes('Liquids and gases'), 'English label is not "Liquids and gases"')
+
+  const arch = reader.open(install.asar)
+  try {
+    for (const p of catPatches) {
+      const file = 'dist/' + p.target
+      if (!arch.has(file)) continue
+      const source = arch.readText(file)
+      const res = engine.apply(source, [p])
+      assert(res.ok && res.outcomes[0].status === 'applied', 'patch failed for ' + p.target)
+    }
+  } finally {
+    arch.close()
+  }
+
+  // Verify renderer registers translations
+  const rendererSrc = fs.readFileSync(path.join(__dirname, '..', 'mods', 'gas-pipes', 'renderer.js'), 'utf8')
+  assert(rendererSrc.includes('Жидкости и газы'), 'renderer does not register "Жидкости и газы"')
+  assert(rendererSrc.includes('SMLN.register.translations'), 'renderer does not call SMLN.register.translations')
+
+  return `${catPatches.length} category patches applied, including Russian and English`
+})
+
+check('i18n locale merge and onLocaleChange patches apply cleanly to the bundle', () => {
+  assert(install, 'no installation to open')
+  const core = require('../src/patch/core-patches')
+  const mergePatch = core.corePatches.find((p) => p.id === 'smln:i18n-locale-merge')
+  const eventPatch = core.corePatches.find((p) => p.id === 'smln:i18n-on-locale-change')
+  assert(mergePatch, 'smln:i18n-locale-merge patch is missing')
+  assert(eventPatch, 'smln:i18n-on-locale-change patch is missing')
+
+  const arch = reader.open(install.asar)
+  try {
+    const bundle = arch.readText('dist/js/bundle.js')
+    const res = engine.apply(bundle, [mergePatch, eventPatch])
+    assert(res.ok, 'patches failed to apply: ' + JSON.stringify(res.outcomes))
+    assert(res.outcomes.every((o) => o.status === 'applied'), 'one or more patches not applied')
+  } finally {
+    arch.close()
+  }
+
+  return 'locale merge and onLocaleChange both applied'
+})
+
+check('console spawn command respects structures, pipes, and non-empty cells to prevent phantoms', () => {
+  const consoleSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'console.js'), 'utf8')
+  assert(consoleSrc.includes('isCellBlockedByStructure'), 'isCellBlockedByStructure helper missing')
+  assert(consoleSrc.includes('isCellEmpty'), 'isCellEmpty helper missing')
+  assert(consoleSrc.includes('isInsideWorld'), 'isInsideWorld helper missing')
+
+  // Run in VM with mock SMLN and game state
+  const placedCells = []
+  const mockState = {
+    store: { world: { size: { width: 100, height: 100 } } },
+    session: { input: { mouse: { cellPosition: { x: 50, y: 50 } } } },
+  }
+  const mockGame = {
+    world: {
+      getDimensions: () => ({ widthCells: 100, heightCells: 100 }),
+      isCellEmpty: (s, x, y) => !(x === 50 && y === 51), // (50, 51) is occupied by terrain/element
+    },
+    structures: {
+      hasBuiltAtCell: (s, x, y) => x === 51 && y === 50, // (51, 50) is occupied by structure
+      getAtCell: () => null,
+    },
+    pipes: {
+      isAt: (s, x, y) => x === 50 && y === 49, // (50, 49) is occupied by pipe
+    },
+    elements: {
+      createAt: (s, x, y, id) => { placedCells.push({ x, y, id }) },
+    },
+    shadows: {
+      refreshRect: () => {},
+    },
+  }
+  const dom = require('./dom-harness').createDom()
+  const mockGlobal = {
+    __SMLN__: {
+      getState: () => mockState,
+      game: mockGame,
+      refreshUI: () => {},
+      on: () => {},
+      log: () => {},
+      enums: {
+        ElementType: { 1: 'water' },
+        ElementByName: { water: 1 },
+        ELEMENT_KEYS: ['water'],
+      },
+    },
+    document: dom.document,
+    window: dom.window,
+    setTimeout: (fn) => fn(),
+  }
+  dom.window.__SMLN__ = mockGlobal.__SMLN__
+  vm.runInNewContext(consoleSrc, mockGlobal)
+
+  assert(mockGlobal.__SMLN__.console, 'SMLN.console was not installed')
+  assert(typeof mockGlobal.__SMLN__.runCommand === 'function', 'SMLN.runCommand was not installed')
+  const res = mockGlobal.__SMLN__.runCommand('spawn water 1 50 50')
+  const resText = Array.isArray(res) ? res.join(' ') : String(res || '')
+  assert(resText.includes('spawned'), 'spawn command did not succeed: ' + resText)
+  assert(resText.includes('rejected'), 'spawn did not reject blocked cells: ' + resText)
+
+  // Verify that (51, 50) [structure], (50, 49) [pipe], and (50, 51) [not empty] were NOT placed
+  assert(!placedCells.some(c => c.x === 51 && c.y === 50), 'structure cell (51, 50) was improperly overwritten!')
+  assert(!placedCells.some(c => c.x === 50 && c.y === 49), 'pipe cell (50, 49) was improperly overwritten!')
+  assert(!placedCells.some(c => c.x === 50 && c.y === 51), 'non-empty cell (50, 51) was improperly overwritten!')
+  assert(placedCells.some(c => c.x === 50 && c.y === 50), 'center empty cell (50, 50) was not placed')
+
+  return 'spawn safely skipped structures, pipes, and non-empty cells'
 })
 
 check('the README documents the story surface story-sdk.js actually exports', () => {

@@ -267,6 +267,41 @@ const corePatches = [
     ],
   },
   {
+    id: 'smln:maps-menu-label',
+    owner: 'smln',
+    description: 'Rename the main-menu Maps entry from the active SandLoader locale',
+    anchorLiteral: '"ui|mainMenu|maps"',
+    // Same contract as smln:mods-menu-label. The game's own translation is the
+    // fallback, so a missing SMLN never blanks the button.
+    find: /\(0,([\w$]+)\.t\)\("ui\|mainMenu\|maps"\)/g,
+    replace: (...args) => {
+      const [full, ns] = args
+      return `((globalThis.${GLOBAL}&&globalThis.${GLOBAL}.mapsLabel)||(0,${ns}.t)("ui|mainMenu|maps"))`
+    },
+    expect: 1,
+    required: false,
+    variants: [
+      {
+        label: 'called without the (0,ns.t) wrapper',
+        find: /([\w$]+\.)?t\("ui\|mainMenu\|maps"\)/g,
+        replace: (...args) => {
+          const [full] = args
+          return `((globalThis.${GLOBAL}&&globalThis.${GLOBAL}.mapsLabel)||${full})`
+        },
+        expect: 'any',
+      },
+      {
+        label: 'any call taking the translation key',
+        find: /([\w$.]{1,40}\()\s*"ui\|mainMenu\|maps"\s*\)/g,
+        replace: (...args) => {
+          const [full] = args
+          return `((globalThis.${GLOBAL}&&globalThis.${GLOBAL}.mapsLabel)||${full})`
+        },
+        expect: 'any',
+      },
+    ],
+  },
+  {
     id: 'smln:sandkit-get-api',
     owner: 'smln',
     description: 'Define state.sandkit.getApi(), which the renderer calls but never defines',
@@ -525,6 +560,42 @@ const corePatches = [
           return `${state}.store.world.externalMap?.topBounds.hard??${topBoundCall(state, 'hard', n)}`
         },
         expect: 1,
+      },
+    ],
+  },
+  {
+    id: 'smln:i18n-locale-merge',
+    owner: 'smln',
+    description: 'Ensure game locale chunks load and merge even if mods registered translations first',
+    anchorLiteral: '`./${e}.json`',
+    find: /if\(!C\[e\]\)try\{const t=await n\(14322\)\(`\.\/\$\{e\}\.json`\);C\[e\]=t\.default\|\|t\}/g,
+    replace: 'if(!C[e]||!C[e].__baseLoaded)try{const t=await n(14322)(`./${e}.json`);C[e]=Object.assign(t.default||t,C[e],{__baseLoaded:!0})}',
+    expect: 1,
+    required: false,
+    variants: [
+      {
+        label: 'double quotes or string concatenation',
+        find: /if\(!C\[e\]\)try\{const t=await n\(14322\)\(["']\.\/["']\+e\+["']\.json["']\);C\[e\]=t\.default\|\|t\}/g,
+        replace: 'if(!C[e]||!C[e].__baseLoaded)try{const t=await n(14322)("./"+e+".json");C[e]=Object.assign(t.default||t,C[e],{__baseLoaded:!0})}',
+        expect: 'any',
+      },
+    ],
+  },
+  {
+    id: 'smln:i18n-on-locale-change',
+    owner: 'smln',
+    description: 'Expose onLocaleChange on FH.i18n for synchronous real-time language switching',
+    anchorLiteral: 'hasTranslation:(e,t)=>(0,we.GX)(e,t),setLocale:async e=>{await(0,we.xS)(e)}',
+    find: /hasTranslation:\(e,t\)=>\(0,([\w$]+)\.GX\)\(e,t\),setLocale:async e=>\{await\(0,\1\.xS\)\(e\)\}/g,
+    replace: 'hasTranslation:(e,t)=>(0,$1.GX)(e,t),onLocaleChange:(0,$1.oQ),setLocale:async e=>{await(0,$1.xS)(e)}',
+    expect: 1,
+    required: false,
+    variants: [
+      {
+        label: 'any identifier sequence before setLocale',
+        find: /([\w$]+\.GX\)\(e,t\),)\s*setLocale:async e=>\{await\(0,([\w$]+)\.xS\)\(e\)\}/g,
+        replace: '$1onLocaleChange:(0,$2.oQ),setLocale:async e=>{await(0,$2.xS)(e)}',
+        expect: 'any',
       },
     ],
   },
