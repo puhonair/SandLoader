@@ -10,6 +10,17 @@ A mod loader for **[Sandustry](https://store.steampowered.com/app/2764460/Sandus
 in-game console, a mod manager, 23-language localization, and support for existing
 [Fluxloader](https://fluxloader.app/) mods.
 
+### ✨ Highlights & Capabilities
+
+- 🕹️ **Pro In-Game Console (`^` / `F1`)** — Shell-like command history (`↑`/`↓`), smart autocompletion, safe `spawn` with structure/pipe collision protection (no phantoms!), live simulation speed control, and runtime API inspector.
+- 📦 **Complete In-Game Mod Manager** — Install mods directly from Steam Workshop or `.zip` archives with permission reviews, toggle mods on/off, and manage local mods without touching game folders.
+- 🗺️ **Full-Blown Map Editor & Custom Maps** — Draw, edit, validate, and play custom maps directly in-game across 6 engine layers with automatic proportional flight-ceiling scaling.
+- 🌐 **Real-Time 23-Language Localization** — Instant, desync-free localization synchronization across all 23 official game languages the moment you change settings.
+- 🚀 **1-Click Cross-Platform Installers** — Double-click launchers for Windows (`.bat`), macOS (`.command`), and Linux (`.sh`) with auto-detected game paths and automated Node.js setup.
+- 🛡️ **In-Memory Runtime Patching** — No file's content is ever modified on disk. Clean updates and 100% reversible uninstalls that never leave broken files behind.
+- 📜 **Missions & Story SDK** — Build custom narrative campaigns, custom NPC speakers with portraits, multi-stage objectives, and cross-mod quest chains.
+- 🔌 **Universal Compatibility** — Drop-in support for legacy Fluxloader mods, Sandkit recipes, custom machines, and isolated simulation workers.
+
 **No file's content is ever modified.** Patching happens in memory while the game
 loads, so a game update can never leave a broken patched file behind. Where the
 build still offers a loader slot, nothing in the install is touched at all.
