@@ -54,7 +54,12 @@ if (typeof SMLN !== 'undefined') {
     for (const item of currentList) {
       if (!item || !item.name || !item.data) continue
       const key = item.name
-      if (!store.blueprints[key]) {
+      const existing = store.blueprints[key]
+      const needsUpdate = !existing ||
+        JSON.stringify(existing.data) !== JSON.stringify(item.data) ||
+        JSON.stringify(existing.signalLinks || null) !== JSON.stringify(item.signalLinks || null)
+
+      if (needsUpdate) {
         store.blueprints[key] = {
           name: item.name,
           data: item.data,
@@ -67,7 +72,7 @@ if (typeof SMLN !== 'undefined') {
 
     if (addedToGlobal > 0) {
       saveGlobalStore(store)
-      SMLN.log('info', `Global Blueprints: saved ${addedToGlobal} new blueprint(s) to global library`)
+      SMLN.log('info', `Global Blueprints: saved ${addedToGlobal} blueprint(s) to global library`)
     }
 
     // 2. Global store -> Current world
@@ -107,16 +112,14 @@ if (typeof SMLN !== 'undefined') {
   }
 
   // Hook into FH when ready
-  let hooked = false
+  let hookedBlueprints = null
   function hookBlueprints() {
-    if (hooked) return
     const fh = getFH()
     if (!fh || !fh.blueprints) return
 
     const bp = fh.blueprints
-    if (bp.__smlnGlobalHooked) return
-    bp.__smlnGlobalHooked = true
-    hooked = true
+    if (hookedBlueprints === bp) return
+    hookedBlueprints = bp
 
     // Wrap save to auto-update global
     if (typeof bp.save === 'function') {
@@ -147,13 +150,26 @@ if (typeof SMLN !== 'undefined') {
     SMLN.log('info', 'Global Blueprints auto-sync active')
   }
 
-  // Periodically check and keep in sync
-  setInterval(() => {
+  // Periodically check and keep in sync with lifecycle cleanup
+  if (globalThis.__smlnGlobalBpInterval) {
+    clearInterval(globalThis.__smlnGlobalBpInterval)
+  }
+  const syncInterval = setInterval(() => {
     if (getFH()) {
       hookBlueprints()
       syncBlueprints(true)
     }
   }, 4000)
+  globalThis.__smlnGlobalBpInterval = syncInterval
+
+  if (typeof SMLN.onDispose === 'function') {
+    SMLN.onDispose(() => {
+      clearInterval(syncInterval)
+      if (globalThis.__smlnGlobalBpInterval === syncInterval) {
+        delete globalThis.__smlnGlobalBpInterval
+      }
+    })
+  }
 
   // Register in-game console commands
   if (typeof SMLN.registerCommand === 'function') {
@@ -201,20 +217,25 @@ if (typeof SMLN !== 'undefined') {
         }
 
         if (action === 'export') {
-          const fh = getFH()
-          if (fh && fh.blueprints && typeof fh.blueprints.exportAllString === 'function') {
-            const exp = fh.blueprints.exportAllString()
-            return [
-              'Export string for current blueprints:',
-              exp || 'No blueprints to export.'
-            ]
+          const bpList = Object.values(store.blueprints || {})
+          if (!bpList.length) {
+            return ['Global Blueprints library is empty. Nothing to export.']
           }
-          return ['Blueprints export API not available in current screen. Enter a world first.']
+          const exp = JSON.stringify(store.blueprints, null, 2)
+          return [
+            `Export payload for Global Blueprints library (${bpList.length} blueprint(s)):`,
+            exp
+          ]
         }
 
         if (action === 'clear') {
-          localStorage.removeItem(STORAGE_KEY)
-          return ['Global Blueprints library has been cleared. (Local save blueprints were left untouched).']
+          try {
+            localStorage.removeItem(STORAGE_KEY)
+            return ['Global Blueprints library has been cleared. (Local save blueprints were left untouched).']
+          } catch (e) {
+            SMLN.log('warn', 'Global Blueprints: could not clear localStorage: ' + e.message)
+            return ['Global Blueprints library could not be cleared: ' + e.message]
+          }
         }
 
         return ['Unknown action. Use: blueprints <status|sync|list|export|clear>']

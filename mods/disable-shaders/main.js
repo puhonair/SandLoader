@@ -61,7 +61,7 @@ module.exports.setup = ({ logger, smln }) => {
     patch = createPatch(source, logger)
   } catch (e) {
     logger.error(`Disable Shaders: patch creation failed: ${e.message}`)
-    return { patches: [] }
+    throw e
   }
 
   return {

@@ -1,7 +1,9 @@
 'use strict'
 
 const assert = require('assert')
+const fs = require('fs')
 const path = require('path')
+const locate = require('../src/asar/locate')
 const reader = require('../src/asar/reader')
 const modLoader = require('../src/mods/loader')
 const disableShaders = require('../mods/disable-shaders/main')
@@ -27,28 +29,46 @@ async function testAll() {
 
   console.log('PASS: Mod discovery and manifest validation succeed!')
 
-  console.log('\n2. Testing Disable Shaders patch against game bundle.js...')
-  const asarPath = 'C:/Steam/steamapps/common/Sandustry/resources/app.smln-original.asar'
-  const archive = reader.open(asarPath)
-  let bundle
-  try {
-    bundle = archive.readText('dist/js/bundle.js')
-  } finally {
-    archive.close()
+  console.log('\n2. Testing Disable Shaders patch syntax and regex...')
+  // Test against synthetic bundle (portable across CI/Linux without game install)
+  const syntheticBundle = 'prefix;(0,v.jsx)(Row,Object.assign({label:(0,t.t)("ui|options|showFps")},{children:(0,v.jsx)(Tgl,{checked:st.state.session.settings.showFps,onChange:p=>{st.state.session.settings.showFps=p;(0,mk.Aq)(st.state,en.JU.Options)}})}));suffix;'
+  const syntheticPatch = disableShaders._test.createPatch(syntheticBundle, { info: console.log })
+  assert.ok(syntheticPatch, 'createPatch returned synthetic patch')
+  assert.ok(syntheticBundle.includes(syntheticPatch.find), 'patch.find must match synthetic target')
+  assert.ok(syntheticPatch.replace.includes('ui|options|disableShaders'), 'replace includes disableShaders string')
+  assert.ok(syntheticPatch.replace.includes('disableBackgroundShader'), 'replace includes disableBackgroundShader')
+
+  // Check if live game installation is available
+  let liveAsar = null
+  const found = locate.tryLocate()
+  if (found.ok && found.install && found.install.asar && fs.existsSync(found.install.asar)) {
+    liveAsar = found.install.asar
+  } else if (found.ok && found.install && found.install.resources) {
+    const orig = path.join(found.install.resources, 'app.smln-original.asar')
+    if (fs.existsSync(orig)) liveAsar = orig
   }
 
-  const patch = disableShaders._test.createPatch(bundle, { info: console.log })
-  assert.ok(patch, 'createPatch returned patch')
-  assert.ok(patch.find, 'patch has find')
-  assert.ok(patch.replace, 'patch has replace')
-  assert.ok(bundle.includes(patch.find), 'patch.find must exist in bundle')
-  assert.ok(patch.replace.includes('ui|options|disableShaders'), 'replace includes disableShaders string')
-  assert.ok(patch.replace.includes('disableBackgroundShader'), 'replace includes disableBackgroundShader')
+  if (liveAsar) {
+    console.log(`\n3. Testing against real game archive (${liveAsar})...`)
+    const archive = reader.open(liveAsar)
+    let bundle
+    try {
+      bundle = archive.readText('dist/js/bundle.js')
+    } finally {
+      archive.close()
+    }
 
-  // Verify that applying the patch produces valid JavaScript
-  const patched = bundle.replace(patch.find, patch.replace)
-  assert.notStrictEqual(patched, bundle, 'patched bundle must differ from original')
-  console.log('PASS: Disable Shaders patch matches and replaces correctly!')
+    const patch = disableShaders._test.createPatch(bundle, { info: console.log })
+    assert.ok(patch, 'createPatch returned patch for live bundle')
+    assert.ok(bundle.includes(patch.find), 'patch.find must exist in live bundle')
+    assert.ok(patch.replace.includes('ui|options|disableShaders'), 'replace includes disableShaders string')
+    assert.ok(patch.replace.includes('disableBackgroundShader'), 'replace includes disableBackgroundShader')
+    const patched = bundle.replace(patch.find, patch.replace)
+    assert.notStrictEqual(patched, bundle, 'patched bundle must differ from original')
+    console.log('PASS: Disable Shaders patch verified against live game bundle!')
+  } else {
+    console.log('\n3. Live game archive not present (CI / headless environment) - skipped real ASAR check.')
+  }
 
   console.log('\nALL MOD TESTS PASSED!')
 }

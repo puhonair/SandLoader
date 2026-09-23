@@ -39,7 +39,7 @@ if (typeof SMLN !== 'undefined') {
         { name: 'action', values: () => ['on', 'off', 'toggle', 'status'] },
       ],
       run: (args) => {
-        const action = (args && args[0] ? String(args[0]).toLowerCase() : 'toggle')
+        const action = args && args[0] ? String(args[0]).toLowerCase() : 'toggle'
         const s = getSession()
         const currentDisabled = !!(s && s.settings && s.settings.disableBackgroundShader)
 
@@ -54,7 +54,13 @@ if (typeof SMLN !== 'undefined') {
         let targetDisabled
         if (action === 'on') targetDisabled = false
         else if (action === 'off') targetDisabled = true
-        else targetDisabled = !currentDisabled // toggle
+        else if (action === 'toggle') targetDisabled = !currentDisabled
+        else {
+          return [
+            `Unknown action "${args[0]}".`,
+            'Usage: shaders <on|off|toggle|status>',
+          ]
+        }
 
         const res = applyShaders(targetDisabled)
         if (!res.ok) return [res.message]
