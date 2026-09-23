@@ -9,6 +9,9 @@ Thumbs.db
 mods/*
 !mods/example-hello/
 !mods/example-missions/
+!mods/gas-pipes/
+!mods/disable-shaders/
+!mods/global-blueprints/
 
 # Fetched by install.js, not part of the source tree.
 vendor/

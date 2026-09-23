@@ -1,7 +1,7 @@
 # SandLoader
 
 [![Sandustry Version](https://img.shields.io/badge/Sandustry-0.5.7%20%7C%200.5.6-blue.svg)](https://store.steampowered.com/app/2764460/Sandustry/)
-[![SandLoader Release](https://img.shields.io/badge/SandLoader-v0.4.1-brightgreen.svg)](https://github.com/LopeKinz/SandLoader/releases)
+[![SandLoader Release](https://img.shields.io/badge/SandLoader-v0.4.2-brightgreen.svg)](https://github.com/LopeKinz/SandLoader/releases)
 [![Tests](https://img.shields.io/badge/tests-295%20passed-success.svg)](tools/selftest.js)
 [![Languages](https://img.shields.io/badge/languages-23%20supported-orange.svg)](#requirements)
 [![License](https://img.shields.io/badge/license-MIT-informational.svg)](LICENSE)
@@ -14,6 +14,7 @@ in-game console, a mod manager, 23-language localization, and support for existi
 
 - 🕹️ **Pro In-Game Console (`^` / `F1`)** — Shell-like command history (`↑`/`↓`), smart autocompletion, safe `spawn` with structure/pipe collision protection (no phantoms!), live simulation speed control, and runtime API inspector.
 - 📦 **Complete In-Game Mod Manager** — Install mods directly from Steam Workshop or `.zip` archives with permission reviews, toggle mods on/off, and manage local mods without touching game folders.
+- 🧩 **Bundled Quality-of-Life Mods** — Out-of-the-box community QoL upgrades: **Gas Pipes** (enables standard liquid pipes, pumps, and tanks to route and handle gases), **Global Blueprints** (preserves blueprints across new saves & worlds), and **Disable Shaders** (restores low-end GPU shader toggle option in Video Settings & console).
 - 🗺️ **Full-Blown Map Editor & Custom Maps** — Draw, edit, validate, and play custom maps directly in-game across 6 engine layers with automatic proportional flight-ceiling scaling.
 - 🌐 **Real-Time 23-Language Localization** — Instant, desync-free localization synchronization across all 23 official game languages the moment you change settings.
 - 🚀 **1-Click Cross-Platform Installers** — Double-click launchers for Windows (`.bat`), macOS (`.command`), and Linux (`.sh`) with auto-detected game paths and automated Node.js setup.
@@ -48,7 +49,7 @@ Main menu → "Maps"                                     →  browse, import, ed
 - [Requirements](#requirements) · [Which stores work](#which-stores-work)
 - [Install](#install) · [SteamCMD](#steamcmd) · [Update](#update) · [Uninstall](#uninstall)
 - [Using the console](#using-the-console)
-- [Managing mods](#managing-mods) · [Install from Workshop](#install-from-workshop)
+- [Managing mods](#managing-mods) · [Bundled mods](#bundled-community-mods) · [Install from Workshop](#install-from-workshop)
 - [Achievements](#achievements-read-this-once)
 - [Troubleshooting](#troubleshooting)
 - [FAQ](#faq)
@@ -326,7 +327,7 @@ Platform
 SandLoader
   path      C:\GOG Games\Sandustry\resources\app
   status    INSTALLED
-  version   0.4.1
+  version   0.4.2
   steamcmd  C:\...\sandloader\vendor\steamcmd\steamcmd.exe
 ```
 
@@ -480,6 +481,18 @@ asks for one. The download then proceeds without subscribing to anything.
 
 `<userData>` is `%APPDATA%\sandustry` on Windows, `~/.config/sandustry` on
 Linux, `~/Library/Application Support/sandustry` on macOS.
+
+### Bundled Community Mods
+
+SandLoader comes with several built-in quality-of-life and content mods ready to enable in the mod manager (located in [`mods/`](mods/)):
+
+| Mod | Location | Description |
+|---|---|---|
+| **Global Blueprints** | [`mods/global-blueprints`](mods/global-blueprints) | **Persistent blueprints across all saves & new games.** Automatically mirrors your blueprints to persistent local storage and syncs them when starting fresh runs or loading new worlds. Provides `blueprints <status\|sync\|list\|export\|clear>` console commands. |
+| **Disable Shaders** | [`mods/disable-shaders`](mods/disable-shaders) | **Performance boost for low-end / integrated GPUs.** Restores the "Disable Shaders" checkbox in **Settings -> Video** (beside "Show FPS") originally available in earlier builds, and adds console commands `shaders <on\|off\|toggle\|status>`. |
+| **Gas Pipes** | [`mods/gas-pipes`](mods/gas-pipes) | **Gas support for fluid systems.** Allows standard liquid pipes, pumps, and tanks to route and store gases seamlessly, and automatically localizes the "Liquids and gases" build category across all 23 supported languages. |
+| **Example Missions** | [`mods/example-missions`](mods/example-missions) | **Missions & Story SDK showcase.** Narrative campaign example demonstrating custom objectives, NPC speakers with portraits, and mission chains. |
+| **Example Hello** | [`mods/example-hello`](mods/example-hello) | **Developer starter template.** Minimal boilerplate mod registering a greeting console command. |
 
 ### Fluxloader mods
 
@@ -1440,6 +1453,14 @@ An honest list:
 
 ## Changelog
 
+### 0.4.2
+
+Verified against Sandustry **0.5.7**. Self-test: **295 passing, 0 failed**. Mod suite: **5 bundled mods verified**.
+
+- **Bundled Mod: Global Blueprints (`mods/global-blueprints`)**: Automatically syncs and persists player blueprints to local storage across runs and saves. Never lose your custom blueprint designs when starting a fresh world or campaign. Adds in-game `blueprints <status|sync|list|export|clear>` console commands.
+- **Bundled Mod: Disable Shaders (`mods/disable-shaders`)**: Restores the native "Disable Shaders" checkbox in Settings -> Video (originally present in earlier game builds) via dynamic bundle patching (`smln:disable-shaders-option`). Dramatically improves performance and reduces stutter on low-end GPUs and laptops. Adds `shaders <on|off|toggle|status>` console commands.
+- **Bundled Mod Quality-of-Life & Documentation**: Added dedicated documentation and automated verification test runner (`tools/test-mods.js`) for all bundled mods.
+
 ### 0.4.1
 
 Verified against Sandustry **0.5.7**. Self-test: **295 passing, 0 failed**. All 0.5.6 patch anchors still match this
@@ -1985,7 +2006,7 @@ game's own loader slot, and Fluxloader mod compatibility.
 
 ## Status
 
-SandLoader **0.4.1**, verified against **Sandustry 0.5.7** (and compatible with 0.5.6). Self-test: **295 passing, 0 failed**. All core patch hooks, shadow attach, ASAR fallback precedence, console autocomplete and history, and 23-language localization verified clean.
+SandLoader **0.4.2**, verified against **Sandustry 0.5.7** (and compatible with 0.5.6). Self-test: **295 passing, 0 failed**. All core patch hooks, shadow attach, ASAR fallback precedence, console autocomplete and history, 23-language localization, and bundled QoL mods verified clean.
 
 ## License
 
