@@ -44,6 +44,7 @@ if (typeof SMLN !== 'undefined') {
         const currentDisabled = !!(s && s.settings && s.settings.disableBackgroundShader)
 
         if (action === 'status') {
+          if (!s || !s.settings) return ['Game session or settings not active yet. Enter a world first.']
           return [
             `Shaders are currently: ${currentDisabled ? 'DISABLED (max performance)' : 'ENABLED (default visuals)'}`,
             `Background filter: ${currentDisabled ? 'OFF' : 'ON'}`,
