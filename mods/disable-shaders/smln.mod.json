@@ -1,0 +1,8 @@
+{
+  "id": "disable-shaders",
+  "name": "Disable Shaders",
+  "version": "1.0.0",
+  "priority": 50,
+  "main": "main.js",
+  "renderer": "renderer.js"
+}

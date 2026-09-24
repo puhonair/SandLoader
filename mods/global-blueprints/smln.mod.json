@@ -1,0 +1,7 @@
+{
+  "id": "global-blueprints",
+  "name": "Global Blueprints",
+  "version": "1.0.0",
+  "priority": 50,
+  "renderer": "renderer.js"
+}

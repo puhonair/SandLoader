@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.2] - 2026-09-24
+
+### Summary
+SandLoader 0.4.2 introduces two highly requested community Quality-of-Life mods bundled out of the box: **Global Blueprints** (persistent blueprints across all saves and new runs) and **Disable Shaders** (native video settings toggle for low-end graphics cards, restoring the toggle originally present in earlier demo builds). Both mods integrate directly into the SandLoader ecosystem with dedicated console commands, zero external dependencies, and seamless compatibility with Sandustry 0.5.7.
+
+---
+
+### Added
+
+* **Bundled Mod: Global Blueprints (`mods/global-blueprints`):**
+  * Automatically mirrors all saved and updated blueprints to persistent local storage (`localStorage['smln:global_blueprints']`).
+  * Seamlessly restores blueprint libraries when starting a new game, creating a new map, or loading a save from another system.
+  * In-game console commands:
+    * `blueprints status` — Show total active blueprints, storage key status, and last sync timestamp.
+    * `blueprints sync` — Force an immediate bidirectional synchronization between session memory and persistent storage.
+    * `blueprints list` — List all blueprints stored in the global library with their titles and structure counts.
+    * `blueprints export` — Print raw JSON blueprint payload for easy backup and sharing.
+    * `blueprints clear` — Reset the global blueprint library cache.
+* **Bundled Mod: Disable Shaders (`mods/disable-shaders`):**
+  * Patches `dist/js/bundle.js` at runtime (`smln:disable-shaders-option`) to restore the "Disable Shaders" (`ui|options|disableShaders`) checkbox inside Settings -> Video, directly beside the "Show FPS" toggle.
+  * Provides massive performance and framerate boosts for low-end GPUs, integrated graphics, laptops, and battery-saving setups.
+  * In-game console commands:
+    * `shaders <on|off|toggle|status>` — Instantly toggle or inspect pixel shader effects live in-game without opening the menu.
+* **Bundled Mod Documentation & Tooling:**
+  * Added documentation and dedicated `README.md` files for both new bundled mods.
+  * Added automated test suite `tools/test-mods.js` to verify mod manifest discovery, descriptor loading, and bytecode patch regex targeting against actual game archives.
+
+---
+
+### Verification
+
+* **Self-Test Suite (`node tools/selftest.js`):**
+  * **295 passed, 0 failed** (Exit Code: 0).
+* **Mod Discovery & Integration Suite (`node tools/test-mods.js`):**
+  * **ALL MOD TESTS PASSED**: Verified clean discovery and manifest validation for all 5 bundled mods (`disable-shaders`, `example-hello`, `example-missions`, `gas-pipes`, `global-blueprints`) and confirmed patch regex accuracy against `dist/js/bundle.js`.
+
+---
+
 ## [0.4.1] - 2026-09-22
 
 ### Summary
